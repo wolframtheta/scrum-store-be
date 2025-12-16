@@ -4,20 +4,15 @@ import { Type } from 'class-transformer';
 import { UnitMeasure } from '../entities/article.entity';
 
 export class CreateArticleDto {
-  @ApiProperty({ example: 'Tomates Cherry Ecológicos', description: 'Nombre del artículo' })
+  @ApiProperty({ example: 'Verduras', description: 'Categoría del artículo' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  category: string;
 
-  @ApiPropertyOptional({ example: 'Verduras', description: 'Categoría del artículo' })
-  @IsOptional()
+  @ApiProperty({ example: 'Tomate', description: 'Producto' })
   @IsString()
-  category?: string;
-
-  @ApiPropertyOptional({ example: 'Tomate', description: 'Producto' })
-  @IsOptional()
-  @IsString()
-  product?: string;
+  @IsNotEmpty()
+  product: string;
 
   @ApiPropertyOptional({ example: 'Cherry', description: 'Variedad del producto' })
   @IsOptional()
@@ -54,6 +49,11 @@ export class CreateArticleDto {
   @IsOptional()
   @IsUUID()
   producerId?: string;
+
+  @ApiPropertyOptional({ example: true, description: 'Si el producto es ecológico', default: false })
+  @IsOptional()
+  @IsBoolean()
+  isEco?: boolean;
 
   @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID del grupo de consumo' })
   @IsUUID()

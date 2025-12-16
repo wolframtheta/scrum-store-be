@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, Param, Patch, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, UseGuards, ValidationPipe, Query } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { OrderStatus } from './entities/order.entity';
+import { PaymentStatus } from './entities/order.entity';
+import { IsManagerGuard } from '../core/guards/is-manager.guard';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -20,8 +21,20 @@ export class OrdersController {
   }
 
   @Get()
-  findAll(@CurrentUser() user: any): Promise<OrderResponseDto[]> {
-    return this.ordersService.findUserOrders(user.id);
+  findAll(
+    @CurrentUser() user: any,
+    @Query('groupId') groupId?: string
+  ): Promise<OrderResponseDto[]> {
+    return this.ordersService.findUserOrders(user.id, groupId);
+  }
+
+  @Get('by-group/:groupId')
+  @UseGuards(IsManagerGuard)
+  findByGroup(
+    @Param('groupId') groupId: string,
+    @Query('paymentStatus') paymentStatus?: PaymentStatus
+  ): Promise<OrderResponseDto[]> {
+    return this.ordersService.findByGroup(groupId, paymentStatus);
   }
 
   @Get(':id')
@@ -32,13 +45,13 @@ export class OrdersController {
     return this.ordersService.findOne(id, user.id);
   }
 
-  @Patch(':id/status')
-  updateStatus(
-    @CurrentUser() user: any,
+  @Patch(':id/delivery')
+  @UseGuards(IsManagerGuard)
+  updateDelivery(
     @Param('id') id: string,
-    @Body('status') status: OrderStatus
+    @Body('isDelivered') isDelivered: boolean
   ): Promise<OrderResponseDto> {
-    return this.ordersService.updateStatus(id, user.id, status);
+    return this.ordersService.updateDelivery(id, isDelivered);
   }
 }
 

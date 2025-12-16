@@ -8,17 +8,13 @@ export class ArticleResponseDto {
   @Expose()
   id: string;
 
-  @ApiProperty({ example: 'Tomates Cherry Ecológicos' })
+  @ApiProperty({ example: 'Hortalissa' })
   @Expose()
-  name: string;
+  category: string;
 
-  @ApiPropertyOptional({ example: 'Hortalissa' })
+  @ApiProperty({ example: 'Tomàquet' })
   @Expose()
-  category?: string;
-
-  @ApiPropertyOptional({ example: 'Tomàquet' })
-  @Expose()
-  product?: string;
+  product: string;
 
   @ApiPropertyOptional({ example: 'Cherry' })
   @Expose()
@@ -55,6 +51,10 @@ export class ArticleResponseDto {
   @ApiPropertyOptional({ example: 'Proveïdor S.L.' })
   @Expose()
   supplierName?: string;
+
+  @ApiProperty({ example: true })
+  @Expose()
+  isEco: boolean;
 
   @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
   @Expose()

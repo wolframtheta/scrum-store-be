@@ -60,7 +60,7 @@ export class ArticlesService {
 
     if (search) {
       queryBuilder.andWhere(
-        '(LOWER(article.name) LIKE LOWER(:search) OR LOWER(article.description) LIKE LOWER(:search) OR LOWER(producer.name) LIKE LOWER(:search))',
+        '(LOWER(article.category) LIKE LOWER(:search) OR LOWER(article.product) LIKE LOWER(:search) OR LOWER(article.variety) LIKE LOWER(:search) OR LOWER(article.description) LIKE LOWER(:search) OR LOWER(producer.name) LIKE LOWER(:search))',
         { search: `%${search}%` },
       );
     }

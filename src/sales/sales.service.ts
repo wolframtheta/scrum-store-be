@@ -51,7 +51,7 @@ export class SalesService {
         }
         
         if (!article.inShowcase) {
-          throw new BadRequestException(`Article ${article.name} is not in showcase`);
+          throw new BadRequestException(`Article ${article.id} is not in showcase`);
         }
       }
 
@@ -82,7 +82,6 @@ export class SalesService {
         const saleItem = this.saleItemsRepository.create({
           saleId: savedSale.id,
           articleId: article.id,
-          articleName: article.name,
           quantity: itemDto.quantity,
           pricePerUnit: article.pricePerUnit,
           totalPrice,
@@ -123,9 +122,16 @@ export class SalesService {
   }
 
   async findUserSales(userEmail: string, consumerGroupId?: string): Promise<SaleResponseDto[]> {
+    console.log('[findUserSales] Looking for sales with userEmail:', userEmail, 'groupId:', consumerGroupId);
+    
+    // Check if any sales exist at all
+    const allSales = await this.salesRepository.count();
+    console.log('[findUserSales] Total sales in DB:', allSales);
+    
     const queryBuilder = this.salesRepository
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.items', 'items')
+      .leftJoinAndSelect('items.article', 'article')
       .where('sale.user_email = :userEmail', { userEmail });
 
     if (consumerGroupId) {
@@ -135,6 +141,7 @@ export class SalesService {
     queryBuilder.orderBy('sale.created_at', 'DESC');
 
     const sales = await queryBuilder.getMany();
+    console.log('[findUserSales] Found sales:', sales.length);
 
     return sales.map(sale => new SaleResponseDto({
       ...sale,
@@ -145,7 +152,7 @@ export class SalesService {
   async findById(id: string): Promise<SaleResponseDto> {
     const sale = await this.salesRepository.findOne({
       where: { id },
-      relations: ['items'],
+      relations: ['items', 'items.article'],
     });
 
     if (!sale) {
@@ -162,6 +169,8 @@ export class SalesService {
     const queryBuilder = this.salesRepository
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.items', 'items')
+      .leftJoinAndSelect('items.article', 'article')
+      .leftJoinAndSelect('sale.user', 'user')
       .where('sale.consumer_group_id = :groupId', { groupId });
 
     if (paymentStatus) {
@@ -174,6 +183,8 @@ export class SalesService {
 
     return sales.map(sale => new SaleResponseDto({
       ...sale,
+      userName: sale.user ? `${sale.user.name} ${sale.user.surname}` : undefined,
+      userEmail: sale.user?.email || sale.userEmail,
       items: sale.items.map(item => new SaleItemResponseDto(item)),
     }));
   }
@@ -211,7 +222,7 @@ export class SalesService {
         
         if (newPaidAmount > Number(saleItem.totalPrice)) {
           throw new BadRequestException(
-            `Payment amount for item ${saleItem.articleName} exceeds total price. ` +
+            `Payment amount for item ${saleItem.articleId} exceeds total price. ` +
             `Total: ${saleItem.totalPrice}, Already paid: ${saleItem.paidAmount}, Trying to add: ${itemPayment.amount}`
           );
         }
@@ -264,6 +275,25 @@ export class SalesService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async updateDeliveryStatus(saleId: string, isDelivered: boolean): Promise<SaleResponseDto> {
+    const sale = await this.salesRepository.findOne({
+      where: { id: saleId },
+      relations: ['items'],
+    });
+
+    if (!sale) {
+      throw new NotFoundException(`Sale with ID ${saleId} not found`);
+    }
+
+    sale.isDelivered = isDelivered;
+    await this.salesRepository.save(sale);
+
+    return new SaleResponseDto({
+      ...sale,
+      items: sale.items.map(item => new SaleItemResponseDto(item)),
+    });
   }
 
   async verifySaleAccess(saleId: string, userEmail: string, requireManager: boolean = false): Promise<Sale> {

@@ -17,14 +17,11 @@ export class Article {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ type: 'varchar', length: 100 })
+  category: string;
+
   @Column({ type: 'varchar', length: 255 })
-  name: string;
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  category?: string;
-
-  @Column({ type: 'varchar', length: 255, nullable: true })
-  product?: string;
+  product: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   variety?: string;
@@ -50,6 +47,9 @@ export class Article {
   @ManyToOne(() => Producer, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'producer_id' })
   producer?: Producer;
+
+  @Column({ type: 'boolean', default: false, name: 'is_eco' })
+  isEco: boolean;
 
   @Column({ type: 'uuid', name: 'consumer_group_id' })
   consumerGroupId: string;

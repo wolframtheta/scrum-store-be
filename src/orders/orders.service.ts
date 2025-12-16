@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Order, OrderStatus } from './entities/order.entity';
+import { Order, PaymentStatus } from './entities/order.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { ArticlesService } from '../articles/articles.service';
@@ -32,19 +32,43 @@ export class OrdersService {
       consumerGroupId: createOrderDto.consumerGroupId,
       items: itemsWithTotals,
       totalPrice,
-      status: OrderStatus.PENDING
+      paidAmount: 0,
+      paymentStatus: PaymentStatus.UNPAID,
+      isDelivered: false
     });
     
     const savedOrder = await this.ordersRepository.save(order);
     return this.toResponseDto(savedOrder);
   }
 
-  async findUserOrders(userId: string): Promise<OrderResponseDto[]> {
-    const orders = await this.ordersRepository.find({
-      where: { userId },
-      order: { createdAt: 'DESC' }
-    });
+  async findUserOrders(userId: string, consumerGroupId?: string): Promise<OrderResponseDto[]> {
+    const queryBuilder = this.ordersRepository
+      .createQueryBuilder('order')
+      .where('order.user_id = :userId', { userId });
 
+    if (consumerGroupId) {
+      queryBuilder.andWhere('order.consumer_group_id = :consumerGroupId', { consumerGroupId });
+    }
+
+    queryBuilder.orderBy('order.created_at', 'DESC');
+
+    const orders = await queryBuilder.getMany();
+    return Promise.all(orders.map(order => this.enrichOrderWithArticles(order)));
+  }
+
+  async findByGroup(groupId: string, paymentStatus?: PaymentStatus): Promise<OrderResponseDto[]> {
+    const queryBuilder = this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .where('order.consumer_group_id = :groupId', { groupId });
+
+    if (paymentStatus) {
+      queryBuilder.andWhere('order.payment_status = :paymentStatus', { paymentStatus });
+    }
+
+    queryBuilder.orderBy('order.created_at', 'DESC');
+
+    const orders = await queryBuilder.getMany();
     return Promise.all(orders.map(order => this.enrichOrderWithArticles(order)));
   }
 
@@ -60,9 +84,19 @@ export class OrdersService {
     return this.enrichOrderWithArticles(order);
   }
 
-  /**
-   * Enrich order with full article information
-   */
+  async updateDelivery(id: string, isDelivered: boolean): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({ where: { id } });
+
+    if (!order) {
+      throw new Error('Order not found');
+    }
+
+    order.isDelivered = isDelivered;
+    const updatedOrder = await this.ordersRepository.save(order);
+    
+    return this.toResponseDto(updatedOrder);
+  }
+
   private async enrichOrderWithArticles(order: Order): Promise<OrderResponseDto> {
     const itemsWithArticles = await Promise.all(
       order.items.map(async (item: any) => {
@@ -92,28 +126,18 @@ export class OrdersService {
     return {
       id: order.id,
       userId: order.userId,
+      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+      userEmail: order.user?.email,
       consumerGroupId: order.consumerGroupId,
       items: itemsWithArticles,
       totalPrice: Number(order.totalPrice),
+      paidAmount: Number(order.paidAmount || 0),
+      paymentStatus: order.paymentStatus,
+      isDelivered: order.isDelivered,
       status: order.status,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt
     };
-  }
-
-  async updateStatus(id: string, userId: string, status: OrderStatus): Promise<OrderResponseDto> {
-    const order = await this.ordersRepository.findOne({
-      where: { id, userId }
-    });
-
-    if (!order) {
-      throw new Error('Order not found');
-    }
-
-    order.status = status;
-    const updatedOrder = await this.ordersRepository.save(order);
-    
-    return this.toResponseDto(updatedOrder);
   }
 
   private toResponseDto(order: Order): OrderResponseDto {
@@ -123,6 +147,9 @@ export class OrdersService {
       consumerGroupId: order.consumerGroupId,
       items: order.items,
       totalPrice: Number(order.totalPrice),
+      paidAmount: Number(order.paidAmount || 0),
+      paymentStatus: order.paymentStatus,
+      isDelivered: order.isDelivered,
       status: order.status,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt

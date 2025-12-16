@@ -9,6 +9,12 @@ export enum OrderStatus {
   CANCELLED = 'cancelled'
 }
 
+export enum PaymentStatus {
+  UNPAID = 'unpaid',
+  PARTIAL = 'partial',
+  PAID = 'paid'
+}
+
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')
@@ -34,6 +40,20 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'total_price' })
   totalPrice: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'paid_amount', default: 0 })
+  paidAmount: number;
+
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    default: PaymentStatus.UNPAID,
+    name: 'payment_status'
+  })
+  paymentStatus: PaymentStatus;
+
+  @Column({ type: 'boolean', default: false, name: 'is_delivered' })
+  isDelivered: boolean;
+
   @Column({
     type: 'enum',
     enum: OrderStatus,
@@ -47,6 +67,10 @@ export class Order {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }
+
+
+
+
 
 
 

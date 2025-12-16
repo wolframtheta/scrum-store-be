@@ -21,9 +21,6 @@ export class SaleItem {
   @JoinColumn({ name: 'article_id' })
   article: Article;
 
-  @Column({ type: 'varchar', length: 255, name: 'article_name' })
-  articleName: string;
-
   @Column({ type: 'decimal', precision: 10, scale: 3 })
   quantity: number;
 

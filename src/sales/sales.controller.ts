@@ -132,6 +132,29 @@ export class SalesController {
     await this.salesService.verifySaleAccess(id, req.user.email, true);
     return this.salesService.registerPayment(id, paymentDto);
   }
+
+  @Patch(':id/delivery')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Marcar venta como entregada (solo gestores)',
+    description: 'Marca una venta como entregada o no entregada.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado de entrega actualizado correctamente.',
+    type: SaleResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  @ApiResponse({ status: 404, description: 'Venta no encontrada' })
+  async updateDeliveryStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('isDelivered') isDelivered: boolean,
+    @Request() req,
+  ): Promise<SaleResponseDto> {
+    await this.salesService.verifySaleAccess(id, req.user.email, true);
+    return this.salesService.updateDeliveryStatus(id, isDelivered);
+  }
 }
 
 

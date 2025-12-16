@@ -20,7 +20,7 @@ export class Sale {
   userEmail: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_email' })
+  @JoinColumn({ name: 'user_email', referencedColumnName: 'email' })
   user: User;
 
   @Column({ type: 'uuid', name: 'consumer_group_id' })
@@ -41,6 +41,9 @@ export class Sale {
 
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.UNPAID, name: 'payment_status' })
   paymentStatus: PaymentStatus;
+
+  @Column({ type: 'boolean', default: false, name: 'is_delivered' })
+  isDelivered: boolean;
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;

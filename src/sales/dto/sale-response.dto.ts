@@ -1,6 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Exclude, Expose, Type } from 'class-transformer';
 import { PaymentStatus } from '../entities/sale.entity';
+import { ArticleResponseDto } from '../../articles/dto/article-response.dto';
 
 @Exclude()
 export class SaleItemResponseDto {
@@ -12,9 +13,10 @@ export class SaleItemResponseDto {
   @Expose()
   articleId: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ type: ArticleResponseDto })
   @Expose()
-  articleName: string;
+  @Type(() => ArticleResponseDto)
+  article?: ArticleResponseDto;
 
   @ApiProperty({ example: 2.5 })
   @Expose()
@@ -47,6 +49,10 @@ export class SaleResponseDto {
   @Expose()
   userEmail: string;
 
+  @ApiProperty({ required: false })
+  @Expose()
+  userName?: string;
+
   @ApiProperty()
   @Expose()
   consumerGroupId: string;
@@ -67,6 +73,10 @@ export class SaleResponseDto {
   @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.PARTIAL })
   @Expose()
   paymentStatus: PaymentStatus;
+
+  @ApiProperty({ example: false })
+  @Expose()
+  isDelivered: boolean;
 
   @ApiProperty()
   @Expose()
