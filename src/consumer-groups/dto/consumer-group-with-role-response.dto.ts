@@ -5,6 +5,7 @@ import { ConsumerGroupResponseDto } from './consumer-group-response.dto';
 /**
  * Role information from user_consumer_group relationship
  */
+@Exclude()
 export class UserGroupRole {
   @ApiProperty({ example: true, description: 'User can purchase from this group' })
   @Expose()

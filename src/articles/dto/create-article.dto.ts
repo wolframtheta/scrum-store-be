@@ -55,6 +55,13 @@ export class CreateArticleDto {
   @IsBoolean()
   isEco?: boolean;
 
+  @ApiPropertyOptional({ example: 21, description: 'Porcentaje de IVA (0-100)', default: 0 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  taxRate?: number;
+
   @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID del grupo de consumo' })
   @IsUUID()
   @IsNotEmpty()

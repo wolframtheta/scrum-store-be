@@ -51,6 +51,9 @@ export class Article {
   @Column({ type: 'boolean', default: false, name: 'is_eco' })
   isEco: boolean;
 
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, name: 'tax_rate' })
+  taxRate: number;
+
   @Column({ type: 'uuid', name: 'consumer_group_id' })
   consumerGroupId: string;
 

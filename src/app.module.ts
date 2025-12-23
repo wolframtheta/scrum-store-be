@@ -11,7 +11,6 @@ import { CategoriesModule } from './categories/categories.module';
 import { ProducersModule } from './producers/producers.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { SalesModule } from './sales/sales.module';
-import { OrdersModule } from './orders/orders.module';
 import { StorageModule } from './storage/storage.module';
 import { CoreModule } from './core/core.module';
 import { NoticesModule } from './notices/notices.module';
@@ -48,7 +47,6 @@ import throttleConfig from './config/throttle.config';
     ProducersModule,
     SuppliersModule,
     SalesModule,
-    OrdersModule,
     NoticesModule,
   ],
   controllers: [AppController],

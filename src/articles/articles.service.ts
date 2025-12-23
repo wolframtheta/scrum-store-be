@@ -41,6 +41,29 @@ export class ArticlesService {
     return dto;
   }
 
+  async createBatch(createDtos: CreateArticleDto[]): Promise<{ created: number; failed: number; articles: ArticleResponseDto[] }> {
+    const results: ArticleResponseDto[] = [];
+    let created = 0;
+    let failed = 0;
+
+    for (const createDto of createDtos) {
+      try {
+        const article = await this.create(createDto);
+        results.push(article);
+        created++;
+      } catch (error) {
+        console.error('Error creating article:', error);
+        failed++;
+      }
+    }
+
+    return {
+      created,
+      failed,
+      articles: results,
+    };
+  }
+
   async findAll(
     groupId?: string,
     inShowcase?: boolean,

@@ -17,6 +17,15 @@ export class CategoriesService {
     return this.categoryRepository.save(category);
   }
 
+  async createBatch(createCategoryDtos: CreateCategoryDto[]): Promise<{ created: number; categories: Category[] }> {
+    const categories = this.categoryRepository.create(createCategoryDtos);
+    const saved = await this.categoryRepository.save(categories);
+    return {
+      created: saved.length,
+      categories: saved,
+    };
+  }
+
   async findAll(consumerGroupId: string): Promise<Category[]> {
     return this.categoryRepository.find({
       where: { consumerGroupId },

@@ -1,6 +1,6 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, ClassSerializerInterceptor } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
@@ -48,6 +48,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  
+  // Class serializer interceptor for DTOs with @Exclude/@Expose
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
   
   // Swagger documentation
   const config = new DocumentBuilder()

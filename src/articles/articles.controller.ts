@@ -54,6 +54,23 @@ export class ArticlesController {
     return this.articlesService.create(createDto);
   }
 
+  @Post('batch')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Crear múltiples artículos en batch',
+    description: 'Solo gestores pueden crear artículos. Crea múltiples artículos en una sola petición.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Artículos creados exitosamente',
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  async createBatch(@Body() createDtos: CreateArticleDto[]): Promise<{ created: number; failed: number; articles: ArticleResponseDto[] }> {
+    return this.articlesService.createBatch(createDtos);
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Listar artículos',

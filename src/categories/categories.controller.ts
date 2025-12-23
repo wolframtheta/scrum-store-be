@@ -21,6 +21,13 @@ export class CategoriesController {
     return this.categoriesService.create(createCategoryDto);
   }
 
+  @Post('batch')
+  @ApiOperation({ summary: 'Create multiple categories in batch' })
+  @ApiResponse({ status: 201, description: 'Categories created successfully' })
+  createBatch(@Body() createCategoryDtos: CreateCategoryDto[]) {
+    return this.categoriesService.createBatch(createCategoryDtos);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Get all categories for a consumer group' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })

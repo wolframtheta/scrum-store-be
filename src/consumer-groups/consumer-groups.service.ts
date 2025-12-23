@@ -10,6 +10,7 @@ import { UpdateConsumerGroupDto } from './dto/update-consumer-group.dto';
 import { ConsumerGroupResponseDto } from './dto/consumer-group-response.dto';
 import { ConsumerGroupWithRoleResponseDto } from './dto/consumer-group-with-role-response.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { plainToInstance } from 'class-transformer';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -76,14 +77,19 @@ export class ConsumerGroupsService {
       relations: ['consumerGroup'],
     });
 
-    return userGroups.map(ug => new ConsumerGroupWithRoleResponseDto({
-      ...ug.consumerGroup,
-      role: {
-        isClient: ug.isClient,
-        isManager: ug.isManager,
-        isDefault: ug.isDefault,
-      }
-    }));
+    return userGroups.map(ug => 
+      plainToInstance(ConsumerGroupWithRoleResponseDto, {
+        ...ug.consumerGroup,
+        role: {
+          isClient: ug.isClient,
+          isManager: ug.isManager,
+          isDefault: ug.isDefault,
+        }
+      }, { 
+        excludeExtraneousValues: true,
+        enableImplicitConversion: true 
+      })
+    );
   }
 
   async findManagerGroups(userEmail: string): Promise<ConsumerGroupResponseDto[]> {
