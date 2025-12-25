@@ -1,0 +1,26 @@
+node_modules
+dist
+.git
+.gitignore
+README.md
+MIGRATION_NOTE.md
+ROLES_SYSTEM.md
+# Don't ignore .env - we need it in the container
+# .env
+.env.local
+.env.*.local
+npm-debug.log
+pnpm-debug.log
+yarn-debug.log
+yarn-error.log
+.DS_Store
+coverage
+test
+*.spec.ts
+.eslintrc.js
+.prettierrc
+# Keep tsconfig files - needed for build
+# tsconfig.json
+# tsconfig.build.json
+eslint.config.mjs
+
