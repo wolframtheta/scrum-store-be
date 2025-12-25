@@ -22,6 +22,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ArticleResponseDto } from './dto/article-response.dto';
 import { PriceHistoryResponseDto } from './dto/price-history-response.dto';
+import { BatchDeleteDto, BatchToggleShowcaseDto, BatchToggleSeasonalDto, BatchToggleEcoDto } from './dto/batch-actions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IsManagerGuard } from '../core/guards/is-manager.guard';
 import { StorageService } from '../storage/storage.service';
@@ -285,6 +286,131 @@ export class ArticlesController {
     }
 
     return this.articlesService.deleteImage(id);
+  }
+
+  @Post('batch/delete')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Eliminar múltiples artículos en batch',
+    description: 'Solo gestores pueden eliminar artículos. Esta acción es irreversible.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Artículos eliminados exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        deleted: { type: 'number', example: 5 },
+        failed: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  async batchDelete(@Body() batchDto: BatchDeleteDto, @Request() req): Promise<{ deleted: number; failed: number }> {
+    // Verificar que l'usuari és manager de tots els grups dels articles
+    for (const articleId of batchDto.articleIds) {
+      const isOwner = await this.articlesService.verifyArticleOwnership(articleId, req.user.email);
+      if (!isOwner) {
+        throw new ForbiddenException(`You are not a manager of the consumer group for article ${articleId}`);
+      }
+    }
+
+    return this.articlesService.batchDelete(batchDto.articleIds);
+  }
+
+  @Post('batch/toggle-showcase')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Cambiar visibilidad en aparador de múltiples artículos en batch',
+    description: 'Solo gestores pueden cambiar la visibilidad en el aparador.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Visibilidad actualizada exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        updated: { type: 'number', example: 5 },
+        failed: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  async batchToggleShowcase(@Body() batchDto: BatchToggleShowcaseDto, @Request() req): Promise<{ updated: number; failed: number }> {
+    // Verificar que l'usuari és manager de tots els grups dels articles
+    for (const articleId of batchDto.articleIds) {
+      const article = await this.articlesService.findById(articleId);
+      const isManager = await this.articlesService.verifyUserIsManager(article.consumerGroupId, req.user.email);
+      if (!isManager) {
+        throw new ForbiddenException(`You are not a manager of the consumer group for article ${articleId}`);
+      }
+    }
+
+    return this.articlesService.batchToggleShowcase(batchDto.articleIds, batchDto.inShowcase);
+  }
+
+  @Post('batch/toggle-seasonal')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Cambiar estado de temporada de múltiples artículos en batch',
+    description: 'Solo gestores pueden cambiar el estado de temporada.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado de temporada actualizado exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        updated: { type: 'number', example: 5 },
+        failed: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  async batchToggleSeasonal(@Body() batchDto: BatchToggleSeasonalDto, @Request() req): Promise<{ updated: number; failed: number }> {
+    // Verificar que l'usuari és manager de tots els grups dels articles
+    for (const articleId of batchDto.articleIds) {
+      const isOwner = await this.articlesService.verifyArticleOwnership(articleId, req.user.email);
+      if (!isOwner) {
+        throw new ForbiddenException(`You are not a manager of the consumer group for article ${articleId}`);
+      }
+    }
+
+    return this.articlesService.batchToggleSeasonal(batchDto.articleIds, batchDto.isSeasonal);
+  }
+
+  @Post('batch/toggle-eco')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Cambiar estado ecológico de múltiples artículos en batch',
+    description: 'Solo gestores pueden cambiar el estado ecológico.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado ecológico actualizado exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        updated: { type: 'number', example: 5 },
+        failed: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  async batchToggleEco(@Body() batchDto: BatchToggleEcoDto, @Request() req): Promise<{ updated: number; failed: number }> {
+    // Verificar que l'usuari és manager de tots els grups dels articles
+    for (const articleId of batchDto.articleIds) {
+      const isOwner = await this.articlesService.verifyArticleOwnership(articleId, req.user.email);
+      if (!isOwner) {
+        throw new ForbiddenException(`You are not a manager of the consumer group for article ${articleId}`);
+      }
+    }
+
+    return this.articlesService.batchToggleEco(batchDto.articleIds, batchDto.isEco);
   }
 }
 

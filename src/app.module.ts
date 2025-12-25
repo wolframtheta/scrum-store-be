@@ -14,6 +14,8 @@ import { SalesModule } from './sales/sales.module';
 import { StorageModule } from './storage/storage.module';
 import { CoreModule } from './core/core.module';
 import { NoticesModule } from './notices/notices.module';
+import { PeriodsModule } from './periods/periods.module';
+import { OrdersModule } from './orders/orders.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -48,6 +50,8 @@ import throttleConfig from './config/throttle.config';
     SuppliersModule,
     SalesModule,
     NoticesModule,
+    PeriodsModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

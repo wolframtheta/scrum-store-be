@@ -225,5 +225,85 @@ export class ArticlesService {
   async verifyUserIsManager(consumerGroupId: string, userEmail: string): Promise<boolean> {
     return this.consumerGroupsService.isManager(userEmail, consumerGroupId);
   }
+
+  async batchDelete(articleIds: string[]): Promise<{ deleted: number; failed: number }> {
+    let deleted = 0;
+    let failed = 0;
+
+    for (const id of articleIds) {
+      try {
+        await this.delete(id);
+        deleted++;
+      } catch (error) {
+        console.error(`Error deleting article ${id}:`, error);
+        failed++;
+      }
+    }
+
+    return { deleted, failed };
+  }
+
+  async batchToggleShowcase(articleIds: string[], inShowcase: boolean): Promise<{ updated: number; failed: number }> {
+    let updated = 0;
+    let failed = 0;
+
+    for (const id of articleIds) {
+      try {
+        await this.toggleShowcase(id, inShowcase);
+        updated++;
+      } catch (error) {
+        console.error(`Error toggling showcase for article ${id}:`, error);
+        failed++;
+      }
+    }
+
+    return { updated, failed };
+  }
+
+  async batchToggleSeasonal(articleIds: string[], isSeasonal: boolean): Promise<{ updated: number; failed: number }> {
+    let updated = 0;
+    let failed = 0;
+
+    for (const id of articleIds) {
+      try {
+        const article = await this.articlesRepository.findOne({ where: { id } });
+        if (!article) {
+          failed++;
+          continue;
+        }
+        article.isSeasonal = isSeasonal;
+        await this.articlesRepository.save(article);
+        updated++;
+      } catch (error) {
+        console.error(`Error toggling seasonal for article ${id}:`, error);
+        failed++;
+      }
+    }
+
+    return { updated, failed };
+  }
+
+  async batchToggleEco(articleIds: string[], isEco: boolean): Promise<{ updated: number; failed: number }> {
+    let updated = 0;
+    let failed = 0;
+
+    for (const id of articleIds) {
+      try {
+        const article = await this.articlesRepository.findOne({ where: { id } });
+        if (!article) {
+          failed++;
+          continue;
+        }
+        article.isEco = isEco;
+        await this.articlesRepository.save(article);
+        updated++;
+      } catch (error) {
+        console.error(`Error toggling eco for article ${id}:`, error);
+        failed++;
+      }
+    }
+
+    return { updated, failed };
+  }
 }
 

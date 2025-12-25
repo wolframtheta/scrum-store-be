@@ -13,7 +13,12 @@ export class ProducersService {
   ) {}
 
   async create(createProducerDto: CreateProducerDto): Promise<Producer> {
-    const producer = this.producerRepository.create(createProducerDto);
+    // Filtrar null values para TypeORM
+    const dto = { ...createProducerDto };
+    if (dto.supplierId === null) {
+      delete dto.supplierId;
+    }
+    const producer = this.producerRepository.create(dto);
     return this.producerRepository.save(producer);
   }
 
@@ -45,7 +50,12 @@ export class ProducersService {
 
   async update(id: string, consumerGroupId: string, updateProducerDto: UpdateProducerDto): Promise<Producer> {
     const producer = await this.findOne(id, consumerGroupId);
-    Object.assign(producer, updateProducerDto);
+    // Filtrar null values para TypeORM
+    const dto = { ...updateProducerDto };
+    if (dto.supplierId === null) {
+      delete dto.supplierId;
+    }
+    Object.assign(producer, dto);
     return this.producerRepository.save(producer);
   }
 

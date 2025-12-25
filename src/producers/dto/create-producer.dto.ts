@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsEmail, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsEmail, IsBoolean, ValidateIf } from 'class-validator';
 
 export class CreateProducerDto {
   @ApiProperty({ example: 'Cal Pagès', description: 'Nombre del productor' })
@@ -7,9 +7,10 @@ export class CreateProducerDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiPropertyOptional({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID del proveedor' })
+  @ApiPropertyOptional({ example: '123e4567-e89b-12d3-a456-426614174000', description: 'ID del proveedor', nullable: true })
   @IsOptional()
-  @IsUUID()
+  @ValidateIf((o) => o.supplierId !== null && o.supplierId !== undefined)
+  @IsUUID(undefined, { message: 'supplierId must be a valid UUID' })
   supplierId?: string;
 
   @ApiPropertyOptional({ example: 'calpages@example.com', description: 'Email del productor' })

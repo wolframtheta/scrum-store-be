@@ -15,7 +15,7 @@ export class OrdersController {
   @Post()
   create(
     @CurrentUser() user: any,
-    @Body(new ValidationPipe({ whitelist: true })) createOrderDto: CreateOrderDto
+    @Body(new ValidationPipe({ whitelist: true, transform: true })) createOrderDto: CreateOrderDto
   ): Promise<OrderResponseDto> {
     return this.ordersService.create(user.id, createOrderDto);
   }

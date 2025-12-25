@@ -1,1 +1,227 @@
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, DataSource } from 'typeorm';
+import { Order, PaymentStatus } from './entities/order.entity';
+import { OrderItem } from './entities/order-item.entity';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { OrderResponseDto, OrderItemResponseDto } from './dto/order-response.dto';
+import { ArticlesService } from '../articles/articles.service';
+import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
+import { UsersService } from '../users/users.service';
 
+@Injectable()
+export class OrdersService {
+  constructor(
+    @InjectRepository(Order)
+    private readonly ordersRepository: Repository<Order>,
+    @InjectRepository(OrderItem)
+    private readonly orderItemsRepository: Repository<OrderItem>,
+    private readonly articlesService: ArticlesService,
+    private readonly consumerGroupsService: ConsumerGroupsService,
+    private readonly usersService: UsersService,
+    private readonly dataSource: DataSource,
+  ) {}
+
+  async create(userId: string, createDto: CreateOrderDto): Promise<OrderResponseDto> {
+    // Get user to verify it exists
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify user is member of the group
+    const isMember = await this.consumerGroupsService.isMember(user.email, createDto.consumerGroupId);
+    if (!isMember) {
+      throw new ForbiddenException('You are not a member of this consumer group');
+    }
+
+    if (!createDto.items || createDto.items.length === 0) {
+      throw new BadRequestException('Order must have at least one item');
+    }
+
+    // Use transaction to ensure data consistency
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Fetch all articles
+      const articleIds = createDto.items.map(item => item.articleId);
+      const articles = await Promise.all(
+        articleIds.map(id => this.articlesService.findById(id))
+      );
+
+      // Verify all articles belong to the same consumer group
+      for (const article of articles) {
+        if (article.consumerGroupId !== createDto.consumerGroupId) {
+          throw new BadRequestException(`Article ${article.id} does not belong to this consumer group`);
+        }
+        
+        if (!article.inShowcase) {
+          throw new BadRequestException(`Article ${article.id} is not in showcase`);
+        }
+      }
+
+      // Create order
+      const order = this.ordersRepository.create({
+        userId,
+        consumerGroupId: createDto.consumerGroupId,
+        totalAmount: 0,
+        paidAmount: 0,
+        paymentStatus: PaymentStatus.UNPAID,
+      });
+
+      const savedOrder = await queryRunner.manager.save(order);
+
+      // Create order items
+      let totalAmount = 0;
+      const orderItems: OrderItem[] = [];
+
+      for (const itemDto of createDto.items) {
+        const article = articles.find(a => a.id === itemDto.articleId);
+        if (!article) {
+          throw new NotFoundException(`Article ${itemDto.articleId} not found`);
+        }
+
+        const totalPrice = Number((Number(article.pricePerUnit) * itemDto.quantity).toFixed(2));
+        totalAmount += totalPrice;
+
+        const orderItem = this.orderItemsRepository.create({
+          orderId: savedOrder.id,
+          articleId: article.id,
+          quantity: itemDto.quantity,
+          pricePerUnit: article.pricePerUnit,
+          totalPrice,
+          paidAmount: 0,
+        });
+
+        orderItems.push(orderItem);
+      }
+
+      await queryRunner.manager.save(orderItems);
+
+      // Update total amount
+      savedOrder.totalAmount = totalAmount;
+      await queryRunner.manager.save(savedOrder);
+
+      await queryRunner.commitTransaction();
+
+      // Reload order with items
+      const completeOrder = await this.ordersRepository.findOne({
+        where: { id: savedOrder.id },
+        relations: ['items', 'items.article', 'user'],
+      });
+
+      if (!completeOrder) {
+        throw new NotFoundException('Order not found after creation');
+      }
+
+      return new OrderResponseDto({
+        ...completeOrder,
+        userName: completeOrder.user ? `${completeOrder.user.name} ${completeOrder.user.surname}` : undefined,
+        items: completeOrder.items.map(item => new OrderItemResponseDto(item)),
+      });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async findUserOrders(userId: string, groupId?: string): Promise<OrderResponseDto[]> {
+    const queryBuilder = this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.article', 'article')
+      .leftJoinAndSelect('order.user', 'user')
+      .where('order.user_id = :userId', { userId });
+
+    if (groupId) {
+      queryBuilder.andWhere('order.consumer_group_id = :groupId', { groupId });
+    }
+
+    queryBuilder.orderBy('order.created_at', 'DESC');
+
+    const orders = await queryBuilder.getMany();
+
+    return orders.map(order => new OrderResponseDto({
+      ...order,
+      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+      items: order.items.map(item => new OrderItemResponseDto(item)),
+    }));
+  }
+
+  async findOne(id: string, userId: string): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id },
+      relations: ['items', 'items.article', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${id} not found`);
+    }
+
+    // Verify user has access (owner or manager)
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isOwner = order.userId === userId;
+    const isManager = await this.consumerGroupsService.isManager(user.email, order.consumerGroupId);
+    
+    if (!isOwner && !isManager) {
+      throw new ForbiddenException('You do not have access to this order');
+    }
+
+    return new OrderResponseDto({
+      ...order,
+      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+      items: order.items.map(item => new OrderItemResponseDto(item)),
+    });
+  }
+
+  async findByGroup(groupId: string, paymentStatus?: PaymentStatus): Promise<OrderResponseDto[]> {
+    const queryBuilder = this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.article', 'article')
+      .leftJoinAndSelect('order.user', 'user')
+      .where('order.consumer_group_id = :groupId', { groupId });
+
+    if (paymentStatus) {
+      queryBuilder.andWhere('order.payment_status = :paymentStatus', { paymentStatus });
+    }
+
+    queryBuilder.orderBy('order.created_at', 'DESC');
+
+    const orders = await queryBuilder.getMany();
+
+    return orders.map(order => new OrderResponseDto({
+      ...order,
+      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+      items: order.items.map(item => new OrderItemResponseDto(item)),
+    }));
+  }
+
+  async updateDelivery(id: string, isDelivered: boolean): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id },
+      relations: ['items', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${id} not found`);
+    }
+
+    order.isDelivered = isDelivered;
+    await this.ordersRepository.save(order);
+
+    return new OrderResponseDto({
+      ...order,
+      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+      items: order.items.map(item => new OrderItemResponseDto(item)),
+    });
+  }
+}

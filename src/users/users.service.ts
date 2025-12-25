@@ -29,6 +29,20 @@ export class UsersService {
     return new UserResponseDto(savedUser);
   }
 
+  async findById(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+    });
+  }
+
+  async findByIdOrFail(id: string): Promise<User> {
+    const user = await this.findById(id);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    return user;
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository
       .createQueryBuilder('user')
