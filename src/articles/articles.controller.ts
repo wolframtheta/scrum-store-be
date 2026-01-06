@@ -100,6 +100,7 @@ export class ArticlesController {
     summary: 'Obtener detalle de un artículo',
     description: 'Obtiene la información completa de un artículo por su ID',
   })
+  @ApiQuery({ name: 'groupId', required: false, description: 'ID del grupo de consumo para obtener precio del período actual' })
   @ApiResponse({
     status: 200,
     description: 'Detalle del artículo',
@@ -107,16 +108,20 @@ export class ArticlesController {
   })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 404, description: 'Artículo no encontrado' })
-  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ArticleResponseDto> {
-    return this.articlesService.findById(id);
+  async findById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('groupId') groupId?: string,
+  ): Promise<ArticleResponseDto> {
+    return this.articlesService.findById(id, groupId);
   }
 
   @Patch(':id')
   @UseGuards(IsManagerGuard)
   @ApiOperation({
     summary: 'Actualizar un artículo',
-    description: 'Solo gestores pueden actualizar artículos. Si se cambia el precio, se guardará en el histórico automáticamente.',
+    description: 'Solo gestores pueden actualizar artículos. Si se cambia el precio, se actualizará el precio del período actual si existe, y se guardará en el histórico automáticamente.',
   })
+  @ApiQuery({ name: 'groupId', required: false, description: 'ID del grupo de consumo para actualizar el precio del período actual' })
   @ApiResponse({
     status: 200,
     description: 'Artículo actualizado exitosamente',
@@ -129,6 +134,7 @@ export class ArticlesController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateDto: UpdateArticleDto,
+    @Query('groupId') groupId: string,
     @Request() req,
   ): Promise<ArticleResponseDto> {
     const isOwner = await this.articlesService.verifyArticleOwnership(id, req.user.email);
@@ -136,7 +142,7 @@ export class ArticlesController {
       throw new ForbiddenException('You are not a manager of this consumer group');
     }
 
-    return this.articlesService.update(id, updateDto);
+    return this.articlesService.update(id, updateDto, groupId);
   }
 
   @Delete(':id')

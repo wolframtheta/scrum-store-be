@@ -11,5 +11,10 @@ export class UpdateMemberRoleDto {
   @IsBoolean()
   @IsNotEmpty()
   isManager: boolean;
+
+  @ApiProperty({ example: false, description: 'Usuario es preparador' })
+  @IsBoolean()
+  @IsNotEmpty()
+  isPreparer: boolean;
 }
 

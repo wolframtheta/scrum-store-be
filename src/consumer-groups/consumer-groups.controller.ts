@@ -137,6 +137,7 @@ export class ConsumerGroupsController {
       decodedEmail,
       updateRoleDto.isClient,
       updateRoleDto.isManager,
+      updateRoleDto.isPreparer,
     );
     return { message: 'Member role updated successfully' };
   }

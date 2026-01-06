@@ -15,6 +15,10 @@ export class UserGroupRole {
   @Expose()
   isManager: boolean;
 
+  @ApiProperty({ example: false, description: 'User can prepare baskets for this group' })
+  @Expose()
+  isPreparer: boolean;
+
   @ApiProperty({ example: true, description: 'This is the user\'s default group' })
   @Expose()
   isDefault: boolean;

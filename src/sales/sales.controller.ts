@@ -17,6 +17,7 @@ import { RegisterPaymentDto } from './dto/register-payment.dto';
 import { SaleResponseDto } from './dto/sale-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IsManagerGuard } from '../core/guards/is-manager.guard';
+import { IsManagerOrPreparerGuard } from '../core/guards/is-manager-or-preparer.guard';
 import { PaymentStatus } from './entities/sale.entity';
 
 @ApiTags('sales')
@@ -63,10 +64,10 @@ export class SalesController {
   }
 
   @Get('by-group/:groupId')
-  @UseGuards(IsManagerGuard)
+  @UseGuards(IsManagerOrPreparerGuard)
   @ApiOperation({
-    summary: 'Obtener ventas de un grupo (solo gestores)',
-    description: 'Lista todas las ventas de un grupo de consumo. Solo accesible para gestores del grupo.',
+    summary: 'Obtener ventas de un grupo (gestores y preparadores)',
+    description: 'Lista todas las ventas de un grupo de consumo. Solo accesible para gestores y preparadores del grupo.',
   })
   @ApiQuery({ 
     name: 'paymentStatus', 
@@ -110,10 +111,10 @@ export class SalesController {
   }
 
   @Patch(':id/payment')
-  @UseGuards(IsManagerGuard)
+  @UseGuards(IsManagerOrPreparerGuard)
   @ApiOperation({
-    summary: 'Registrar pago (solo gestores)',
-    description: 'Registra un pago para una venta. Puede ser pago total o parcial por items. Solo gestores pueden registrar pagos.',
+    summary: 'Registrar pago (gestores y preparadores)',
+    description: 'Registra un pago para una venta. Puede ser pago total o parcial por items. Solo gestores y preparadores pueden registrar pagos.',
   })
   @ApiResponse({
     status: 200,
@@ -134,9 +135,9 @@ export class SalesController {
   }
 
   @Patch(':id/delivery')
-  @UseGuards(IsManagerGuard)
+  @UseGuards(IsManagerOrPreparerGuard)
   @ApiOperation({
-    summary: 'Marcar venta como entregada (solo gestores)',
+    summary: 'Marcar venta como entregada (gestores y preparadores)',
     description: 'Marca una venta como entregada o no entregada.',
   })
   @ApiResponse({

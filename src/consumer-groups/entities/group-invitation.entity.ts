@@ -24,6 +24,9 @@ export class GroupInvitation {
   @Column({ type: 'boolean', default: true, name: 'is_client' })
   isClient: boolean;
 
+  @Column({ type: 'boolean', default: false, name: 'is_preparer' })
+  isPreparer: boolean;
+
   @Column({ type: 'timestamp', nullable: true, name: 'expires_at' })
   expiresAt?: Date | null;
 

@@ -7,6 +7,7 @@ import { ArticlePriceHistory } from './entities/article-price-history.entity';
 import { ConsumerGroupsModule } from '../consumer-groups/consumer-groups.module';
 import { StorageModule } from '../storage/storage.module';
 import { CoreModule } from '../core/core.module';
+import { PeriodsModule } from '../periods/periods.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { CoreModule } from '../core/core.module';
     forwardRef(() => ConsumerGroupsModule),
     StorageModule,
     forwardRef(() => CoreModule),
+    forwardRef(() => PeriodsModule),
   ],
   controllers: [ArticlesController],
   providers: [ArticlesService],

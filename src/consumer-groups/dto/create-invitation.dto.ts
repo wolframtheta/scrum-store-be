@@ -22,6 +22,11 @@ export class CreateInvitationDto {
   @IsOptional()
   isClient?: boolean;
 
+  @ApiProperty({ example: false, description: 'Si el usuario será preparador', default: false })
+  @IsBoolean()
+  @IsOptional()
+  isPreparer?: boolean;
+
   @ApiPropertyOptional({ 
     example: 0, 
     description: 'Días hasta que expire la invitación. 0 = no caduca nunca. Por defecto: 0 (sin expiración)', 

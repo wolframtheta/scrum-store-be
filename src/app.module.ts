@@ -16,18 +16,20 @@ import { CoreModule } from './core/core.module';
 import { NoticesModule } from './notices/notices.module';
 import { PeriodsModule } from './periods/periods.module';
 import { OrdersModule } from './orders/orders.module';
+import { ConfigSystemModule } from './config-system/config-system.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import storageConfig from './config/storage.config';
 import throttleConfig from './config/throttle.config';
+import { getEnvFilePaths } from './config/env.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig, storageConfig, throttleConfig],
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: getEnvFilePaths(),
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
@@ -52,6 +54,7 @@ import throttleConfig from './config/throttle.config';
     NoticesModule,
     PeriodsModule,
     OrdersModule,
+    ConfigSystemModule,
   ],
   controllers: [AppController],
   providers: [AppService],

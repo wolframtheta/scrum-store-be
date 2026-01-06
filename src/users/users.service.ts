@@ -14,10 +14,14 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserResponseDto> {
-    // Check if user already exists
-    const existingUser = await this.usersRepository.findOne({
-      where: { email: createUserDto.email },
-    });
+    // Normalize email for checking
+    const normalizedEmail = createUserDto.email.toLowerCase().trim();
+    
+    // Check if user already exists (case-insensitive)
+    const existingUser = await this.usersRepository
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = LOWER(:email)', { email: normalizedEmail })
+      .getOne();
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
@@ -46,7 +50,7 @@ export class UsersService {
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository
       .createQueryBuilder('user')
-      .where('user.email = :email', { email })
+      .where('LOWER(user.email) = LOWER(:email)', { email })
       .addSelect('user.password')
       .getOne();
   }
@@ -199,6 +203,12 @@ export class UsersService {
     // TODO: Send email with temporary password
     
     return temporaryPassword;
+  }
+
+  async updatePassword(email: string, newPassword: string): Promise<void> {
+    const user = await this.findByEmailOrFail(email);
+    user.password = newPassword; // Will be hashed by @BeforeUpdate hook
+    await this.usersRepository.save(user);
   }
 }
 

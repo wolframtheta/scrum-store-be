@@ -1,14 +1,16 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
+import { ConfigSystemService } from '../config-system/config-system.service';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UserResponseDto } from '../users/dto/user-response.dto';
+import { UserRole } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +18,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly configSystemService: ConfigSystemService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepository: Repository<RefreshToken>,
   ) {}
@@ -32,13 +35,22 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    // Validate user credentials
+    // Validate user credentials first
     const user = await this.validateUser(loginDto.email, loginDto.password);
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check if login is enabled
+    // SuperAdmin siempre puede hacer login, incluso si está deshabilitado
+    const isSuperAdmin = user.roles.includes(UserRole.SUPER_ADMIN);
+    if (!isSuperAdmin) {
+      const isLoginEnabled = await this.configSystemService.isLoginEnabled();
+      if (!isLoginEnabled) {
+        throw new ServiceUnavailableException('Login is currently disabled');
+      }
+    }
 
     // Generate tokens
     const userResponse = new UserResponseDto(user);
@@ -178,6 +190,12 @@ export class AuthService {
       { userEmail, revoked: false },
       { revoked: true },
     );
+  }
+
+  async resetPassword(email: string, newPassword: string): Promise<void> {
+    await this.usersService.updatePassword(email, newPassword);
+    // Revocar todos los tokens del usuario para forzar nuevo login
+    await this.revokeAllUserTokens(email);
   }
 }
 

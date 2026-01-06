@@ -31,6 +31,9 @@ export class UserConsumerGroup {
   @Column({ type: 'boolean', default: false, name: 'is_manager' })
   isManager: boolean;
 
+  @Column({ type: 'boolean', default: false, name: 'is_preparer' })
+  isPreparer: boolean;
+
   @CreateDateColumn({ type: 'timestamp', name: 'joined_at' })
   joinedAt: Date;
 }

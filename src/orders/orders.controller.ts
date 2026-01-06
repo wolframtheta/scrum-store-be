@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PaymentStatus } from './entities/order.entity';
 import { IsManagerGuard } from '../core/guards/is-manager.guard';
+import { IsManagerOrPreparerGuard } from '../core/guards/is-manager-or-preparer.guard';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -29,7 +30,7 @@ export class OrdersController {
   }
 
   @Get('by-group/:groupId')
-  @UseGuards(IsManagerGuard)
+  @UseGuards(IsManagerOrPreparerGuard)
   findByGroup(
     @Param('groupId') groupId: string,
     @Query('paymentStatus') paymentStatus?: PaymentStatus
@@ -46,7 +47,7 @@ export class OrdersController {
   }
 
   @Patch(':id/delivery')
-  @UseGuards(IsManagerGuard)
+  @UseGuards(IsManagerOrPreparerGuard)
   updateDelivery(
     @Param('id') id: string,
     @Body('isDelivered') isDelivered: boolean

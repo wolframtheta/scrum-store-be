@@ -26,6 +26,7 @@ import { UpdateNoticeDto } from './dto/update-notice.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IsMemberGuard } from '../core/guards/is-member.guard';
 import { IsManagerGuard } from '../core/guards/is-manager.guard';
+import { IsManagerOrPreparerGuard } from '../core/guards/is-manager-or-preparer.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StorageService } from '../storage/storage.service';
@@ -41,10 +42,10 @@ export class NoticesController {
   ) {}
 
   @Post()
-  @UseGuards(IsManagerGuard)
-  @ApiOperation({ summary: 'Crear un nou avís (només gestors)' })
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({ summary: 'Crear un nou avís (gestors i preparadors)' })
   @ApiResponse({ status: 201, description: 'Avís creat correctament' })
-  @ApiResponse({ status: 403, description: 'No ets gestor del grup' })
+  @ApiResponse({ status: 403, description: 'No ets gestor ni preparador del grup' })
   create(
     @Body() createNoticeDto: CreateNoticeDto,
     @CurrentUser('email') userEmail: string,

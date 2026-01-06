@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import { Repository, In, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
 import { Period, PeriodRecurrence } from './entities/period.entity';
 import { PeriodArticle } from './entities/period-article.entity';
 import { CreatePeriodDto } from './dto/create-period.dto';
@@ -405,6 +405,79 @@ export class PeriodsService {
     console.log(`[Showcase] Returning ${showcasePeriods.length} open periods with ${showcasePeriods.reduce((sum, p) => sum + p.articles.length, 0)} total articles`);
 
     return showcasePeriods;
+  }
+
+  /**
+   * Obtener el período actual (abierto) para un consumer group
+   * Un período está abierto si la fecha actual está entre startDate y endDate
+   */
+  async getCurrentPeriod(consumerGroupId: string, supplierId?: string): Promise<Period | null> {
+    const suppliers = await this.suppliersService.findAll(consumerGroupId, false);
+    const supplierIds = supplierId ? [supplierId] : suppliers.map(s => s.id);
+
+    if (supplierIds.length === 0) {
+      return null;
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Buscar períodos abiertos
+    const periods = await this.periodsRepository
+      .createQueryBuilder('period')
+      .where('period.supplier_id IN (:...supplierIds)', { supplierIds })
+      .andWhere('period.start_date <= :today', { today: todayStr })
+      .andWhere('period.end_date >= :today', { today: todayStr })
+      .orderBy('period.start_date', 'DESC')
+      .getMany();
+
+    // Retornar el más reciente si hay varios
+    return periods.length > 0 ? periods[0] : null;
+  }
+
+  /**
+   * Obtener el precio de un artículo en el período actual
+   */
+  async getCurrentPeriodPrice(articleId: string, consumerGroupId: string): Promise<number | null> {
+    const currentPeriod = await this.getCurrentPeriod(consumerGroupId);
+    
+    if (!currentPeriod) {
+      return null;
+    }
+
+    const periodArticle = await this.periodArticlesRepository.findOne({
+      where: {
+        periodId: currentPeriod.id,
+        articleId,
+      },
+    });
+
+    return periodArticle ? Number(periodArticle.pricePerUnit) : null;
+  }
+
+  /**
+   * Obtener precios del período actual para múltiples artículos
+   */
+  async getCurrentPeriodPrices(articleIds: string[], consumerGroupId: string): Promise<Map<string, number>> {
+    const currentPeriod = await this.getCurrentPeriod(consumerGroupId);
+    const pricesMap = new Map<string, number>();
+
+    if (!currentPeriod || articleIds.length === 0) {
+      return pricesMap;
+    }
+
+    const periodArticles = await this.periodArticlesRepository.find({
+      where: {
+        periodId: currentPeriod.id,
+        articleId: In(articleIds),
+      },
+    });
+
+    periodArticles.forEach(pa => {
+      pricesMap.set(pa.articleId, Number(pa.pricePerUnit));
+    });
+
+    return pricesMap;
   }
 }
 

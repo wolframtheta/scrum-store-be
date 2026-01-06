@@ -1,10 +1,11 @@
-import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 
@@ -84,6 +85,28 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'No autorizado - Token inválido o expirado' })
   async getMe(@CurrentUser() user: any) {
     return user;
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ 
+    summary: 'Restablecer contraseña',
+    description: 'Permite a un usuario restablecer su contraseña proporcionando email y nueva contraseña'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Contraseña restablecida exitosamente', 
+    schema: { type: 'object', properties: { message: { type: 'string' } } }
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos - Las contraseñas no coinciden o son inválidas' })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+    // Validar que las contraseñas coincidan
+    if (resetPasswordDto.password !== resetPasswordDto.confirmPassword) {
+      throw new BadRequestException('Las contraseñas no coinciden');
+    }
+
+    await this.authService.resetPassword(resetPasswordDto.email, resetPasswordDto.password);
+    return { message: 'Password reset successfully' };
   }
 }
 

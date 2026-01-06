@@ -83,6 +83,7 @@ export class ConsumerGroupsService {
         role: {
           isClient: ug.isClient,
           isManager: ug.isManager,
+          isPreparer: ug.isPreparer,
           isDefault: ug.isDefault,
         }
       }, { 
@@ -135,7 +136,7 @@ export class ConsumerGroupsService {
     await this.consumerGroupRepository.remove(group);
   }
 
-  async addMember(groupId: string, userEmail: string, isClient = true, isManager = false): Promise<void> {
+  async addMember(groupId: string, userEmail: string, isClient = true, isManager = false, isPreparer = false): Promise<void> {
     // Normalitzar l'email (lowercase per evitar problemes de majúscules/minúscules)
     const normalizedEmail = userEmail.toLowerCase().trim();
     
@@ -145,8 +146,11 @@ export class ConsumerGroupsService {
       throw new NotFoundException(`Consumer group with ID ${groupId} not found`);
     }
 
-    // Check if user exists
-    const user = await this.userRepository.findOne({ where: { email: normalizedEmail } });
+    // Check if user exists (case-insensitive search for compatibility)
+    const user = await this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = LOWER(:email)', { email: normalizedEmail })
+      .getOne();
     if (!user) {
       throw new NotFoundException(`No s'ha trobat cap usuari amb el correu ${normalizedEmail}`);
     }
@@ -170,6 +174,7 @@ export class ConsumerGroupsService {
       consumerGroupId: groupId,
       isClient,
       isManager,
+      isPreparer,
       isDefault: userGroupsCount === 0, // Set as default if it's the first group
     });
 
@@ -188,7 +193,7 @@ export class ConsumerGroupsService {
     await this.userConsumerGroupRepository.remove(userGroup);
   }
 
-  async updateMemberRole(groupId: string, userEmail: string, isClient: boolean, isManager: boolean): Promise<void> {
+  async updateMemberRole(groupId: string, userEmail: string, isClient: boolean, isManager: boolean, isPreparer: boolean): Promise<void> {
     // Normalitzar l'email (lowercase per evitar problemes de majúscules/minúscules)
     const normalizedEmail = userEmail.toLowerCase().trim();
     
@@ -213,6 +218,7 @@ export class ConsumerGroupsService {
 
     userGroup.isClient = isClient;
     userGroup.isManager = isManager;
+    userGroup.isPreparer = isPreparer;
 
     await this.userConsumerGroupRepository.save(userGroup);
   }
@@ -253,6 +259,7 @@ export class ConsumerGroupsService {
       profileImage: member.user.profileImage,
       isClient: member.isClient,
       isManager: member.isManager,
+      isPreparer: member.isPreparer,
       joinedAt: member.joinedAt,
     }));
   }
@@ -274,6 +281,27 @@ export class ConsumerGroupsService {
     this.logger.debug(`Result: ${JSON.stringify(userGroup)}`);
     const result = !!userGroup;
     this.logger.debug(`isManager returning: ${result}`);
+
+    return result;
+  }
+
+  async isPreparer(userEmail: string, groupId: string): Promise<boolean> {
+    // Normalitzar l'email (lowercase per evitar problemes de majúscules/minúscules)
+    const normalizedEmail = userEmail.toLowerCase().trim();
+    
+    this.logger.debug(`Checking if ${normalizedEmail} is preparer of group ${groupId}`);
+    
+    // Usar consulta case-insensitive per compatibilitat amb emails antics
+    const userGroup = await this.userConsumerGroupRepository
+      .createQueryBuilder('ucg')
+      .where('LOWER(ucg.userEmail) = LOWER(:userEmail)', { userEmail: normalizedEmail })
+      .andWhere('ucg.consumerGroupId = :groupId', { groupId })
+      .andWhere('ucg.isPreparer = :isPreparer', { isPreparer: true })
+      .getOne();
+
+    this.logger.debug(`Result: ${JSON.stringify(userGroup)}`);
+    const result = !!userGroup;
+    this.logger.debug(`isPreparer returning: ${result}`);
 
     return result;
   }
@@ -453,6 +481,7 @@ export class ConsumerGroupsService {
       invitedEmail: dto.invitedEmail,
       isManager: dto.isManager ?? false,
       isClient: dto.isClient ?? true,
+      isPreparer: dto.isPreparer ?? false,
       expiresAt,
     });
 
@@ -468,7 +497,8 @@ export class ConsumerGroupsService {
       throw new NotFoundException('Invitació no trobada');
     }
 
-    if (invitation.isUsed) {
+    // Només comprovar si està usada si l'invitació té caducitat (no és permanent)
+    if (invitation.expiresAt && invitation.isUsed) {
       throw new BadRequestException('Aquesta invitació ja ha estat utilitzada');
     }
 
@@ -492,14 +522,18 @@ export class ConsumerGroupsService {
       invitation.consumerGroupId,
       userEmail,
       invitation.isClient,
-      invitation.isManager
+      invitation.isManager,
+      invitation.isPreparer
     );
 
-    // Mark invitation as used
-    invitation.isUsed = true;
-    invitation.usedBy = userEmail;
-    invitation.usedAt = new Date();
-    await this.invitationRepository.save(invitation);
+    // Només marcar com a usada si l'invitació té caducitat (no és permanent)
+    // Les invitacions permanents poden ser usades múltiples vegades
+    if (invitation.expiresAt) {
+      invitation.isUsed = true;
+      invitation.usedBy = userEmail;
+      invitation.usedAt = new Date();
+      await this.invitationRepository.save(invitation);
+    }
   }
 
   async cleanupExpiredInvitations(): Promise<number> {

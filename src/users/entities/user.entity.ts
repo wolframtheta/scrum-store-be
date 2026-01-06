@@ -5,6 +5,7 @@ export enum UserRole {
   SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
   CLIENT = 'client',
+  PREPARER = 'preparer',
 }
 
 @Entity('users')
@@ -52,6 +53,14 @@ export class User {
   async hashPassword() {
     if (this.password) {
       this.password = await bcrypt.hash(this.password, 10);
+    }
+  }
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  normalizeEmail() {
+    if (this.email) {
+      this.email = this.email.toLowerCase().trim();
     }
   }
 
