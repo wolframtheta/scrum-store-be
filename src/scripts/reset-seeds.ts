@@ -16,9 +16,15 @@ async function resetSeeds() {
     console.log('\n🗑️  Esborrant dades de seed...');
 
     // Esborrar en ordre invers de dependències
-    await queryRunner.query(`DELETE FROM "user_consumer_groups" WHERE "user_email" IN (SELECT "email" FROM "users" WHERE "email" LIKE '%@scrumstore.com')`);
-    await queryRunner.query(`DELETE FROM "consumer_groups" WHERE "email" LIKE '%@scrumstore.com'`);
-    await queryRunner.query(`DELETE FROM "users" WHERE "email" LIKE '%@scrumstore.com'`);
+    // Primero borrar relaciones de user_consumer_groups
+    await queryRunner.query(`DELETE FROM "user_consumer_groups" WHERE "user_email" IN (SELECT "email" FROM "users" WHERE "email" LIKE '%@scrumstore.com' OR "email" = 'xaviermarques4f@gmail.com')`);
+    await queryRunner.query(`DELETE FROM "user_consumer_groups" WHERE "consumer_group_id" IN (SELECT "id" FROM "consumer_groups" WHERE "email" LIKE '%@scrumstore.com' OR "email" = 'grupo-prueba@scrumstore.com')`);
+    
+    // Borrar grupos de consumo de seed
+    await queryRunner.query(`DELETE FROM "consumer_groups" WHERE "email" LIKE '%@scrumstore.com' OR "email" = 'grupo-prueba@scrumstore.com'`);
+    
+    // Borrar usuarios de seed
+    await queryRunner.query(`DELETE FROM "users" WHERE "email" LIKE '%@scrumstore.com' OR "email" = 'xaviermarques4f@gmail.com'`);
 
     console.log('✅ Dades de seed esborrades');
 
