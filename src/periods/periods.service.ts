@@ -389,6 +389,7 @@ export class PeriodsService {
         isSeasonal: pa.article!.isSeasonal || false,
         description: pa.article!.description,
         city: pa.article!.city,
+        taxRate: pa.article!.taxRate || 0,
       }));
 
       showcasePeriods.push({

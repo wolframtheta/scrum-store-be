@@ -57,6 +57,10 @@ export class ShowcaseArticleItemDto {
   @ApiPropertyOptional()
   @Expose()
   city?: string;
+
+  @ApiPropertyOptional()
+  @Expose()
+  taxRate?: number;
 }
 
 export class ShowcasePeriodDto {
