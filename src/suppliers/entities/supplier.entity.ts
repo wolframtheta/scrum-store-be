@@ -9,7 +9,7 @@ export class Supplier {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'tax_id' })
   taxId?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
@@ -24,10 +24,10 @@ export class Supplier {
   @Column({ type: 'text', nullable: true })
   address?: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'postal_code' })
   postalCode?: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, name: 'bank_account' })
   bankAccount?: string;
 
   @Column({ type: 'text', nullable: true })

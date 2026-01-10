@@ -6,7 +6,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
 import { join } from 'path';
+import { readFileSync } from 'fs';
 import { AppModule } from './app.module';
+
+// Leer versión del package.json
+const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+const appVersion = packageJson.version;
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -56,7 +61,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Scrum Store API')
     .setDescription('API REST para la gestión de grupos de consumo - Scrum Store')
-    .setVersion('1.0')
+    .setVersion(appVersion)
     .addBearerAuth(
       {
         type: 'http',
