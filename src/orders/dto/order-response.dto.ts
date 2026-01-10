@@ -9,9 +9,9 @@ export class OrderItemResponseDto {
   @Expose()
   id: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   @Expose()
-  articleId: string;
+  articleId: string | null;
 
   @ApiPropertyOptional({ type: ArticleResponseDto })
   @Expose()

@@ -14,12 +14,12 @@ export class OrderItem {
   @JoinColumn({ name: 'order_id' })
   order: Order;
 
-  @Column({ type: 'uuid', name: 'article_id' })
-  articleId: string;
+  @Column({ type: 'uuid', name: 'article_id', nullable: true })
+  articleId: string | null;
 
-  @ManyToOne(() => Article, { onDelete: 'RESTRICT' })
+  @ManyToOne(() => Article, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'article_id' })
-  article: Article;
+  article: Article | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 3 })
   quantity: number;

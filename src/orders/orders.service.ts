@@ -8,6 +8,7 @@ import { OrderResponseDto, OrderItemResponseDto } from './dto/order-response.dto
 import { ArticlesService } from '../articles/articles.service';
 import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
 import { UsersService } from '../users/users.service';
+import { ArticleResponseDto } from '../articles/dto/article-response.dto';
 
 @Injectable()
 export class OrdersService {
@@ -21,6 +22,18 @@ export class OrdersService {
     private readonly usersService: UsersService,
     private readonly dataSource: DataSource,
   ) {}
+
+  private mapOrderItemToDto(item: OrderItem): OrderItemResponseDto {
+    return new OrderItemResponseDto({
+      id: item.id,
+      articleId: item.articleId,
+      article: item.article ? new ArticleResponseDto(item.article) : undefined,
+      quantity: item.quantity,
+      pricePerUnit: item.pricePerUnit,
+      totalPrice: item.totalPrice,
+      paidAmount: item.paidAmount,
+    });
+  }
 
   async create(userId: string, createDto: CreateOrderDto): Promise<OrderResponseDto> {
     // Get user to verify it exists
@@ -119,7 +132,7 @@ export class OrdersService {
       return new OrderResponseDto({
         ...completeOrder,
         userName: completeOrder.user ? `${completeOrder.user.name} ${completeOrder.user.surname}` : undefined,
-        items: completeOrder.items.map(item => new OrderItemResponseDto(item)),
+        items: completeOrder.items.map(item => this.mapOrderItemToDto(item)),
       });
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -148,7 +161,7 @@ export class OrdersService {
     return orders.map(order => new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => new OrderItemResponseDto(item)),
+      items: order.items.map(item => this.mapOrderItemToDto(item)),
     }));
   }
 
@@ -178,7 +191,7 @@ export class OrdersService {
     return new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => new OrderItemResponseDto(item)),
+      items: order.items.map(item => this.mapOrderItemToDto(item)),
     });
   }
 
@@ -201,7 +214,7 @@ export class OrdersService {
     return orders.map(order => new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => new OrderItemResponseDto(item)),
+      items: order.items.map(item => this.mapOrderItemToDto(item)),
     }));
   }
 
@@ -221,7 +234,20 @@ export class OrdersService {
     return new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => new OrderItemResponseDto(item)),
+      items: order.items.map(item => this.mapOrderItemToDto(item)),
     });
+  }
+
+  async delete(id: string): Promise<void> {
+    const order = await this.ordersRepository.findOne({
+      where: { id },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${id} not found`);
+    }
+
+    // Los order_items se borrarán automáticamente por CASCADE
+    await this.ordersRepository.remove(order);
   }
 }
