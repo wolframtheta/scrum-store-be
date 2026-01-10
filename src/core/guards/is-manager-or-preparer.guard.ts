@@ -64,9 +64,9 @@ export class IsManagerOrPreparerGuard implements CanActivate {
       }
     }
 
-    // Si estem en un endpoint de comandes (PATCH /orders/:id/delivery)
+    // Si estem en un endpoint de comandes (PATCH /orders/:id/delivery o DELETE /orders/:id)
     // i no tenim groupId, intentar obtenir-lo de la comanda
-    if (!groupId && isOrdersEndpoint && request.params.id && routePath.includes('/delivery')) {
+    if (!groupId && isOrdersEndpoint && request.params.id && (routePath.includes('/delivery') || request.method === 'DELETE')) {
       try {
         const ordersRepository = this.moduleRef.get<Repository<Order>>(getRepositoryToken(Order), { strict: false });
         if (ordersRepository) {
