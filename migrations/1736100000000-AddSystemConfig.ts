@@ -4,9 +4,9 @@ export class AddSystemConfig1736100000000 implements MigrationInterface {
   name = 'AddSystemConfig1736100000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Crear tabla system_config
+    // Crear tabla system_config solo si no existe
     await queryRunner.query(`
-      CREATE TABLE "system_config" (
+      CREATE TABLE IF NOT EXISTS "system_config" (
         "key" character varying(100) NOT NULL,
         "value" text NOT NULL,
         "description" character varying(500),
@@ -15,10 +15,11 @@ export class AddSystemConfig1736100000000 implements MigrationInterface {
       )
     `);
 
-    // Insertar configuración inicial con login habilitado
+    // Insertar configuración inicial con login habilitado solo si no existe
     await queryRunner.query(`
       INSERT INTO "system_config" ("key", "value", "description", "updated_at")
       VALUES ('login_enabled', 'true', 'Habilita o deshabilita el login en el sistema', NOW())
+      ON CONFLICT ("key") DO NOTHING
     `);
   }
 
