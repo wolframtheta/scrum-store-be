@@ -1,5 +1,9 @@
 # Stage 1: Build
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
+
+# Build argument for app version
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -19,7 +23,11 @@ COPY . .
 RUN pnpm run build
 
 # Stage 2: Production
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
+
+# Build argument for app version
+ARG APP_VERSION
+ENV APP_VERSION=${APP_VERSION}
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate

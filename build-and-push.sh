@@ -77,28 +77,30 @@ fi
 echo "🔐 Logging into registry..."
 echo "$PASSWORD" | docker login $REGISTRY -u $USERNAME --password-stdin
 
-echo "🔨 Building backend image..."
-docker-compose build backend
+# Construir la imagen con buildx
+FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+echo "🔨 Building backend image with buildx..."
+echo "🏷️  Image: ${FULL_IMAGE_NAME}"
 
-# Obtener el nombre de la imagen local construida por docker-compose
-# docker-compose genera imágenes con formato: directorio_servicio:tag
-PROJECT_NAME=$(basename $(pwd) | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g')
-LOCAL_IMAGE="${PROJECT_NAME}_backend"
-
-echo "🏷️  Tagging image ${LOCAL_IMAGE}:latest -> ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-docker tag ${LOCAL_IMAGE}:latest ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+docker buildx build \
+  --platform linux/amd64 \
+  --build-arg APP_VERSION=${VERSION} \
+  -t ${FULL_IMAGE_NAME} \
+  --load \
+  .
 
 # También taggear como latest si no se pasó tag personalizado
 if [ -z "$1" ]; then
+  LATEST_TAG="${REGISTRY}/${IMAGE_NAME}:latest"
   echo "🏷️  Also tagging as latest..."
-  docker tag ${LOCAL_IMAGE}:latest ${REGISTRY}/${IMAGE_NAME}:latest
+  docker tag ${FULL_IMAGE_NAME} ${LATEST_TAG}
 fi
 
 echo "⬆️  Pushing image to registry..."
-docker push ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+docker push ${FULL_IMAGE_NAME}
 
 if [ -z "$1" ]; then
-  docker push ${REGISTRY}/${IMAGE_NAME}:latest
+  docker push ${LATEST_TAG}
 fi
 
 echo "✅ Backend image uploaded to registry with tag: ${IMAGE_TAG}!"
