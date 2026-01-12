@@ -33,6 +33,10 @@ import { FixSalesUserEmailType1736300000000 } from '../migrations/1736300000000-
 import { AddPaymentStatusToOrders1736400000000 } from '../migrations/1736400000000-AddPaymentStatusToOrders';
 import { AllowArticleDeletionInOrders1736500000000 } from '../migrations/1736500000000-AllowArticleDeletionInOrders';
 import { AddIsEcoToArticles1736600000000 } from '../migrations/1736600000000-AddIsEcoToArticles';
+import { AddTaxRateToArticles1736700000000 } from '../migrations/1736700000000-AddTaxRateToArticles';
+import { AddTotalAmountToOrders1736800000000 } from '../migrations/1736800000000-AddTotalAmountToOrders';
+import { AddPaidAmountToOrders1736900000000 } from '../migrations/1736900000000-AddPaidAmountToOrders';
+import { AddIsDeliveredToOrders1737000000000 } from '../migrations/1737000000000-AddIsDeliveredToOrders';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -69,6 +73,10 @@ export const AppDataSource = new DataSource({
     AddPaymentStatusToOrders1736400000000,
     AllowArticleDeletionInOrders1736500000000,
     AddIsEcoToArticles1736600000000,
+    AddTaxRateToArticles1736700000000,
+    AddTotalAmountToOrders1736800000000,
+    AddPaidAmountToOrders1736900000000,
+    AddIsDeliveredToOrders1737000000000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
