@@ -2,10 +2,25 @@
 
 set -e
 
-REGISTRY="palantir.scrum-app.com"
-USERNAME="palantir"
-PASSWORD="palantir123"
 IMAGE_NAME="scrum-store-backend"
+
+# Cargar variables del registry desde archivo de configuración
+REGISTRY_CONFIG=".docker-registry.env"
+if [ ! -f "$REGISTRY_CONFIG" ]; then
+  echo "❌ Error: No se encontró el archivo de configuración $REGISTRY_CONFIG"
+  echo "Por favor, crea el archivo copiando .docker-registry.env.example y completa tus credenciales"
+  exit 1
+fi
+
+# Cargar variables del archivo
+source "$REGISTRY_CONFIG"
+
+# Verificar que las variables estén definidas
+if [ -z "$REGISTRY" ] || [ -z "$USERNAME" ] || [ -z "$PASSWORD" ]; then
+  echo "❌ Error: Faltan variables de configuración en $REGISTRY_CONFIG"
+  echo "Asegúrate de definir: REGISTRY, USERNAME, PASSWORD"
+  exit 1
+fi
 
 # Verificar que estamos en un repositorio git
 if [ ! -d ".git" ]; then
