@@ -60,7 +60,7 @@ async function showMigrationStatus() {
         const match = file.match(/^(\d+)-(.+)\.ts$/);
         if (match) {
           return {
-            timestamp: parseInt(match[1], 10),
+            timestamp: Number(match[1]), // Usar Number para asegurar tipo numérico
             name: match[2],
             filename: file,
           };
@@ -77,12 +77,16 @@ async function showMigrationStatus() {
       return;
     }
 
-    // Crear mapa de migracions executades per nom
-    const executedMap = new Map<string, { id: number; timestamp: number }>();
+    // Crear mapa de migracions executades per timestamp (més fiable que per nom)
+    const executedMap = new Map<number, { id: number; name: string }>();
     executedMigrations.forEach((migration) => {
-      executedMap.set(migration.name, {
+      // Asegurar que timestamp sea número
+      const ts = typeof migration.timestamp === 'string' 
+        ? Number(migration.timestamp) 
+        : migration.timestamp;
+      executedMap.set(ts, {
         id: migration.id,
-        timestamp: migration.timestamp,
+        name: migration.name,
       });
     });
 
@@ -104,7 +108,7 @@ async function showMigrationStatus() {
     let pendingCount = 0;
 
     migrationFiles.forEach((migration) => {
-      const isExecuted = executedMap.has(migration.name);
+      const isExecuted = executedMap.has(migration.timestamp);
       const status = isExecuted ? '✅ APLICADA' : '⏳ PENDENT';
       const timestamp = migration.timestamp.toString();
 

@@ -42,7 +42,13 @@
     "migration:status:pro": "ENVIRONMENT=pro ts-node -r tsconfig-paths/register src/scripts/migration-status.ts",
     "migration:status:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/scripts/migration-status.ts",
     "seed:run": "ts-node -r tsconfig-paths/register src/seeds/run.ts",
-    "seed:reset": "ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts"
+    "seed:reset": "ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts",
+    "seed:run:pre": "ENVIRONMENT=pre ts-node -r tsconfig-paths/register src/seeds/run.ts",
+    "seed:run:pro": "ENVIRONMENT=pro ts-node -r tsconfig-paths/register src/seeds/run.ts",
+    "seed:run:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/seeds/run.ts",
+    "seed:reset:pre": "ENVIRONMENT=pre ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts",
+    "seed:reset:pro": "ENVIRONMENT=pro ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts",
+    "seed:reset:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.932.0",

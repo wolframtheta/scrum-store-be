@@ -24,6 +24,16 @@ import { PeriodArticle } from './periods/entities/period-article.entity';
 import { Order } from './orders/entities/order.entity';
 import { OrderItem } from './orders/entities/order-item.entity';
 
+// Importar migraciones
+import { InitialSchema1735152000000 } from '../migrations/1735152000000-InitialSchema1735152000000';
+import { AddPreparerRole1736080000000 } from '../migrations/1736080000000-AddPreparerRole';
+import { AddSystemConfig1736100000000 } from '../migrations/1736100000000-AddSystemConfig';
+import { AddPreparerRoleToEnum1736200000000 } from '../migrations/1736200000000-AddPreparerRoleToEnum';
+import { FixSalesUserEmailType1736300000000 } from '../migrations/1736300000000-FixSalesUserEmailType';
+import { AddPaymentStatusToOrders1736400000000 } from '../migrations/1736400000000-AddPaymentStatusToOrders';
+import { AllowArticleDeletionInOrders1736500000000 } from '../migrations/1736500000000-AllowArticleDeletionInOrders';
+import { AddIsEcoToArticles1736600000000 } from '../migrations/1736600000000-AddIsEcoToArticles';
+
 export const AppDataSource = new DataSource({
   type: 'postgres',
   host: process.env.DATABASE_HOST || 'localhost',
@@ -51,9 +61,14 @@ export const AppDataSource = new DataSource({
     OrderItem,
   ],
   migrations: [
-    // Usar ruta absoluta per assegurar que es carreguen correctament
-    path.resolve(process.cwd(), 'migrations', '*.ts'),
-    path.resolve(process.cwd(), 'migrations', '*.js'),
+    InitialSchema1735152000000,
+    AddPreparerRole1736080000000,
+    AddSystemConfig1736100000000,
+    AddPreparerRoleToEnum1736200000000,
+    FixSalesUserEmailType1736300000000,
+    AddPaymentStatusToOrders1736400000000,
+    AllowArticleDeletionInOrders1736500000000,
+    AddIsEcoToArticles1736600000000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
