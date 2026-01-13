@@ -9,8 +9,8 @@ export class Supplier {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, name: 'tax_id' })
-  taxId?: string;
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'cif' })
+  cif?: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   email?: string;

@@ -10,7 +10,7 @@ export class CreateSupplierDto {
   @ApiPropertyOptional({ example: 'B12345678', description: 'CIF/NIF del proveedor' })
   @IsOptional()
   @IsString()
-  taxId?: string;
+  cif?: string;
 
   @ApiPropertyOptional({ example: 'info@cooperativa.cat', description: 'Email del proveedor' })
   @IsOptional()
