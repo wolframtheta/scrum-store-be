@@ -9,9 +9,17 @@ import { join } from 'path';
 import { readFileSync } from 'fs';
 import { AppModule } from './app.module';
 
-// Leer versión del package.json
-const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
-const appVersion = packageJson.version;
+// Leer versión del version.json (con fallback a package.json)
+let appVersion = '0.0.0';
+let buildInfo = '';
+try {
+  const versionJson = JSON.parse(readFileSync(join(process.cwd(), 'version.json'), 'utf8'));
+  appVersion = versionJson.version;
+  buildInfo = versionJson.buildTag ? ` (Build: ${versionJson.buildTag})` : '';
+} catch {
+  const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+  appVersion = packageJson.version;
+}
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -60,7 +68,7 @@ async function bootstrap() {
   // Swagger documentation
   const config = new DocumentBuilder()
     .setTitle('Scrum Store API')
-    .setDescription('API REST para la gestión de grupos de consumo - Scrum Store')
+    .setDescription(`API REST para la gestión de grupos de consumo - Scrum Store${buildInfo}`)
     .setVersion(appVersion)
     .addBearerAuth(
       {
@@ -92,6 +100,7 @@ async function bootstrap() {
   await app.listen(port);
   
   console.log(`🚀 Application is running on: http://localhost:${port}/${apiPrefix}`);
+  console.log(`📦 Version: ${appVersion}${buildInfo}`);
   console.log(`📚 Swagger docs available at: http://localhost:${port}/docs`);
   console.log(`🖼️  Images served at: http://localhost:${port}/images`);
 }
