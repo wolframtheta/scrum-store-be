@@ -13,7 +13,7 @@ WORKDIR /app
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies
+# Install dependencies (including dev dependencies for build)
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
@@ -21,6 +21,9 @@ COPY . .
 
 # Build the application
 RUN pnpm run build
+
+# Verify build output
+RUN ls -la dist && echo "Build completed successfully"
 
 # Stage 2: Production
 FROM node:24-alpine AS production
@@ -59,5 +62,5 @@ USER nestjs
 EXPOSE 3000
 
 # Start the application
-CMD ["node", "dist/main"]
+CMD ["node", "dist/main.js"]
 
