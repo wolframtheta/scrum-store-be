@@ -130,7 +130,11 @@ export class ArticlesService {
   async findAll(
     groupId?: string,
     inShowcase?: boolean,
+    isEco?: boolean,
+    isSeasonal?: boolean,
+    categories?: string[],
     search?: string,
+    productSearch?: string,
   ): Promise<ArticleResponseDto[]> {
     const queryBuilder = this.articlesRepository.createQueryBuilder('article')
       .leftJoinAndSelect('article.producer', 'producer')
@@ -144,11 +148,31 @@ export class ArticlesService {
       queryBuilder.andWhere('article.in_showcase = :inShowcase', { inShowcase });
     }
 
+    if (isEco !== undefined) {
+      queryBuilder.andWhere('article.is_eco = :isEco', { isEco });
+    }
+
+    if (isSeasonal !== undefined) {
+      queryBuilder.andWhere('article.is_seasonal = :isSeasonal', { isSeasonal });
+    }
+
+    if (categories && categories.length > 0) {
+      // Filtrar categories buides i fer trim
+      const validCategories = categories.filter(c => c && c.trim().length > 0).map(c => c.trim());
+      if (validCategories.length > 0) {
+        queryBuilder.andWhere('article.category IN (:...categories)', { categories: validCategories });
+      }
+    }
+
     if (search) {
       queryBuilder.andWhere(
         '(LOWER(article.category) LIKE LOWER(:search) OR LOWER(article.product) LIKE LOWER(:search) OR LOWER(article.variety) LIKE LOWER(:search) OR LOWER(article.description) LIKE LOWER(:search) OR LOWER(producer.name) LIKE LOWER(:search))',
         { search: `%${search}%` },
       );
+    }
+
+    if (productSearch) {
+      queryBuilder.andWhere('LOWER(article.product) LIKE LOWER(:productSearch)', { productSearch: `%${productSearch}%` });
     }
 
     queryBuilder.orderBy('article.created_at', 'DESC');

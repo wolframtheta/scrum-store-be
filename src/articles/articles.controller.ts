@@ -79,7 +79,11 @@ export class ArticlesController {
   })
   @ApiQuery({ name: 'groupId', required: false, description: 'Filtrar por grupo de consumo' })
   @ApiQuery({ name: 'inShowcase', required: false, type: Boolean, description: 'Filtrar por aparador' })
+  @ApiQuery({ name: 'isEco', required: false, type: Boolean, description: 'Filtrar por ecológico' })
+  @ApiQuery({ name: 'isSeasonal', required: false, type: Boolean, description: 'Filtrar por de temporada' })
+  @ApiQuery({ name: 'categories', required: false, description: 'Filtrar por categorías (array separado por comas)' })
   @ApiQuery({ name: 'search', required: false, description: 'Buscar por nombre, descripción o productor' })
+  @ApiQuery({ name: 'productSearch', required: false, description: 'Buscar específicamente por nombre del producto' })
   @ApiResponse({
     status: 200,
     description: 'Lista de artículos',
@@ -89,10 +93,17 @@ export class ArticlesController {
   async findAll(
     @Query('groupId') groupId?: string,
     @Query('inShowcase') inShowcase?: string,
+    @Query('isEco') isEco?: string,
+    @Query('isSeasonal') isSeasonal?: string,
+    @Query('categories') categories?: string,
     @Query('search') search?: string,
+    @Query('productSearch') productSearch?: string,
   ): Promise<ArticleResponseDto[]> {
     const showcaseFilter = inShowcase === 'true' ? true : inShowcase === 'false' ? false : undefined;
-    return this.articlesService.findAll(groupId, showcaseFilter, search);
+    const ecoFilter = isEco === 'true' ? true : isEco === 'false' ? false : undefined;
+    const seasonalFilter = isSeasonal === 'true' ? true : isSeasonal === 'false' ? false : undefined;
+    const categoriesFilter = categories && categories.trim() ? categories.split(',').map(c => c.trim()).filter(c => c.length > 0) : undefined;
+    return this.articlesService.findAll(groupId, showcaseFilter, ecoFilter, seasonalFilter, categoriesFilter, search, productSearch);
   }
 
   @Get(':id')
