@@ -38,3 +38,4 @@ export class AddManatUnitMeasure1737100000000 implements MigrationInterface {
   }
 }
 
+
