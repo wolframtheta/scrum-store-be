@@ -2,7 +2,7 @@
 # SERVER CONFIGURATION
 # ==========================================
 NODE_ENV=development
-PORT=3000
+PORT=3100
 API_PREFIX=api/v1
 
 # ==========================================
