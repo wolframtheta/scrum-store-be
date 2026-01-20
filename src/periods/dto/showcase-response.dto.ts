@@ -38,6 +38,10 @@ export class ShowcaseArticleItemDto {
   @Expose()
   producerName?: string;
 
+  @ApiPropertyOptional()
+  @Expose()
+  supplierName?: string;
+
   @ApiProperty()
   @Expose()
   isAvailable: boolean;

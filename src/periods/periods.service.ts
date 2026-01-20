@@ -304,7 +304,7 @@ export class PeriodsService {
       where: {
         supplierId: In(supplierIds),
       },
-      relations: ['supplier', 'periodArticles', 'periodArticles.article', 'periodArticles.article.producer'],
+      relations: ['supplier', 'periodArticles', 'periodArticles.article', 'periodArticles.article.producer', 'periodArticles.article.producer.supplier'],
       order: { startDate: 'ASC' },
     });
 
@@ -329,6 +329,7 @@ export class PeriodsService {
       .leftJoinAndSelect('period.periodArticles', 'periodArticles')
       .leftJoinAndSelect('periodArticles.article', 'article')
       .leftJoinAndSelect('article.producer', 'producer')
+      .leftJoinAndSelect('producer.supplier', 'producerSupplier')
       .orderBy('period.start_date', 'ASC')
       .getMany();
 
@@ -384,6 +385,7 @@ export class PeriodsService {
         unitMeasure: pa.article!.unitMeasure || 'unit',
         image: pa.article!.image,
         producerName: pa.article!.producer?.name,
+        supplierName: pa.article!.producer?.supplier?.name,
         isAvailable: true, // Por defecto disponible
         isEco: pa.article!.isEco || false,
         isSeasonal: pa.article!.isSeasonal || false,

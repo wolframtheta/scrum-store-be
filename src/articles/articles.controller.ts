@@ -22,7 +22,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ArticleResponseDto } from './dto/article-response.dto';
 import { PriceHistoryResponseDto } from './dto/price-history-response.dto';
-import { BatchDeleteDto, BatchToggleShowcaseDto, BatchToggleSeasonalDto, BatchToggleEcoDto } from './dto/batch-actions.dto';
+import { BatchDeleteDto, BatchToggleShowcaseDto, BatchToggleSeasonalDto, BatchToggleEcoDto, BatchSearchImagesDto } from './dto/batch-actions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IsManagerGuard } from '../core/guards/is-manager.guard';
 import { StorageService } from '../storage/storage.service';
@@ -84,6 +84,8 @@ export class ArticlesController {
   @ApiQuery({ name: 'categories', required: false, description: 'Filtrar por categorías (array separado por comas)' })
   @ApiQuery({ name: 'search', required: false, description: 'Buscar por nombre, descripción o productor' })
   @ApiQuery({ name: 'productSearch', required: false, description: 'Buscar específicamente por nombre del producto' })
+  @ApiQuery({ name: 'producerIds', required: false, description: 'Filtrar por IDs de productores (array separado por comas)' })
+  @ApiQuery({ name: 'supplierIds', required: false, description: 'Filtrar por IDs de proveedores (array separado por comas)' })
   @ApiResponse({
     status: 200,
     description: 'Lista de artículos',
@@ -98,12 +100,16 @@ export class ArticlesController {
     @Query('categories') categories?: string,
     @Query('search') search?: string,
     @Query('productSearch') productSearch?: string,
+    @Query('producerIds') producerIds?: string,
+    @Query('supplierIds') supplierIds?: string,
   ): Promise<ArticleResponseDto[]> {
     const showcaseFilter = inShowcase === 'true' ? true : inShowcase === 'false' ? false : undefined;
     const ecoFilter = isEco === 'true' ? true : isEco === 'false' ? false : undefined;
     const seasonalFilter = isSeasonal === 'true' ? true : isSeasonal === 'false' ? false : undefined;
     const categoriesFilter = categories && categories.trim() ? categories.split(',').map(c => c.trim()).filter(c => c.length > 0) : undefined;
-    return this.articlesService.findAll(groupId, showcaseFilter, ecoFilter, seasonalFilter, categoriesFilter, search, productSearch);
+    const producerIdsFilter = producerIds && producerIds.trim() ? producerIds.split(',').map(id => id.trim()).filter(id => id.length > 0) : undefined;
+    const supplierIdsFilter = supplierIds && supplierIds.trim() ? supplierIds.split(',').map(id => id.trim()).filter(id => id.length > 0) : undefined;
+    return this.articlesService.findAll(groupId, showcaseFilter, ecoFilter, seasonalFilter, categoriesFilter, search, productSearch, producerIdsFilter, supplierIdsFilter);
   }
 
   @Get(':id')
@@ -305,6 +311,29 @@ export class ArticlesController {
     return this.articlesService.deleteImage(id);
   }
 
+  @Post(':id/search-image')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Buscar y actualizar imagen del artículo automáticamente',
+    description: 'Solo gestores pueden buscar imágenes. Busca una imagen relacionada con el producto y la actualiza.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Imagen buscada y actualizada exitosamente',
+    type: ArticleResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  @ApiResponse({ status: 404, description: 'Artículo no encontrado' })
+  async searchImage(@Param('id', ParseUUIDPipe) id: string, @Request() req): Promise<ArticleResponseDto> {
+    const isOwner = await this.articlesService.verifyArticleOwnership(id, req.user.email);
+    if (!isOwner) {
+      throw new ForbiddenException('You are not a manager of this consumer group');
+    }
+
+    return this.articlesService.searchAndUpdateImage(id);
+  }
+
   @Post('batch/delete')
   @UseGuards(IsManagerGuard)
   @ApiOperation({
@@ -428,6 +457,37 @@ export class ArticlesController {
     }
 
     return this.articlesService.batchToggleEco(batchDto.articleIds, batchDto.isEco);
+  }
+
+  @Post('batch/search-images')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Buscar imágenes de múltiples artículos en batch',
+    description: 'Solo gestores pueden buscar imágenes. Busca y actualiza imágenes para múltiples artículos.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Búsqueda de imágenes completada',
+    schema: {
+      type: 'object',
+      properties: {
+        updated: { type: 'number', example: 5 },
+        failed: { type: 'number', example: 0 },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
+  async batchSearchImages(@Body() batchDto: BatchSearchImagesDto, @Request() req): Promise<{ updated: number; failed: number }> {
+    // Verificar que l'usuari és manager de tots els grups dels articles
+    for (const articleId of batchDto.articleIds) {
+      const isOwner = await this.articlesService.verifyArticleOwnership(articleId, req.user.email);
+      if (!isOwner) {
+        throw new ForbiddenException(`You are not a manager of the consumer group for article ${articleId}`);
+      }
+    }
+
+    return this.articlesService.batchSearchImages(batchDto.articleIds);
   }
 }
 
