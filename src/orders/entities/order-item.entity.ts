@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Order } from './order.entity';
 import { Article } from '../../articles/entities/article.entity';
+import { Period } from '../../periods/entities/period.entity';
 
 @Entity('order_items')
 export class OrderItem {
@@ -20,6 +21,13 @@ export class OrderItem {
   @ManyToOne(() => Article, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'article_id' })
   article: Article | null;
+
+  @Column({ type: 'uuid', name: 'period_id', nullable: true })
+  periodId: string | null;
+
+  @ManyToOne(() => Period, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'period_id' })
+  period: Period | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 3 })
   quantity: number;

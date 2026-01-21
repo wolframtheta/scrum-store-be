@@ -4,6 +4,37 @@ import { PaymentStatus } from '../entities/order.entity';
 import { ArticleResponseDto } from '../../articles/dto/article-response.dto';
 
 @Exclude()
+export class PeriodInfoDto {
+  @ApiProperty()
+  @Expose()
+  id: string;
+
+  @ApiProperty()
+  @Expose()
+  name: string;
+
+  @ApiProperty()
+  @Expose()
+  supplierId: string;
+
+  @ApiProperty()
+  @Expose()
+  startDate: Date | string;
+
+  @ApiProperty()
+  @Expose()
+  endDate: Date | string;
+
+  @ApiProperty()
+  @Expose()
+  deliveryDate: Date | string;
+
+  constructor(partial: Partial<PeriodInfoDto>) {
+    Object.assign(this, partial);
+  }
+}
+
+@Exclude()
 export class OrderItemResponseDto {
   @ApiProperty()
   @Expose()
@@ -17,6 +48,15 @@ export class OrderItemResponseDto {
   @Expose()
   @Type(() => ArticleResponseDto)
   article?: ArticleResponseDto;
+
+  @ApiPropertyOptional()
+  @Expose()
+  periodId?: string;
+
+  @ApiPropertyOptional({ type: PeriodInfoDto })
+  @Expose()
+  @Type(() => PeriodInfoDto)
+  period?: PeriodInfoDto;
 
   @ApiProperty({ example: 2.5 })
   @Expose()

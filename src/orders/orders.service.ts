@@ -28,6 +28,15 @@ export class OrdersService {
       id: item.id,
       articleId: item.articleId,
       article: item.article ? new ArticleResponseDto(item.article) : undefined,
+      periodId: item.periodId || undefined,
+      period: item.period ? {
+        id: item.period.id,
+        name: item.period.name,
+        supplierId: item.period.supplierId,
+        startDate: item.period.startDate,
+        endDate: item.period.endDate,
+        deliveryDate: item.period.deliveryDate,
+      } : undefined,
       quantity: item.quantity,
       pricePerUnit: item.pricePerUnit,
       totalPrice: item.totalPrice,
@@ -102,6 +111,7 @@ export class OrdersService {
         const orderItem = this.orderItemsRepository.create({
           orderId: savedOrder.id,
           articleId: article.id,
+          periodId: itemDto.orderPeriodId || null,
           quantity: itemDto.quantity,
           pricePerUnit: article.pricePerUnit,
           totalPrice,
@@ -122,7 +132,7 @@ export class OrdersService {
       // Reload order with items
       const completeOrder = await this.ordersRepository.findOne({
         where: { id: savedOrder.id },
-        relations: ['items', 'items.article', 'user'],
+        relations: ['items', 'items.article', 'items.period', 'user'],
       });
 
       if (!completeOrder) {
@@ -147,6 +157,7 @@ export class OrdersService {
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.article', 'article')
+      .leftJoinAndSelect('items.period', 'period')
       .leftJoinAndSelect('order.user', 'user')
       .where('order.user_id = :userId', { userId });
 
@@ -168,7 +179,7 @@ export class OrdersService {
   async findOne(id: string, userId: string): Promise<OrderResponseDto> {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['items', 'items.article', 'user'],
+      relations: ['items', 'items.article', 'items.period', 'user'],
     });
 
     if (!order) {
@@ -200,6 +211,7 @@ export class OrdersService {
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'items')
       .leftJoinAndSelect('items.article', 'article')
+      .leftJoinAndSelect('items.period', 'period')
       .leftJoinAndSelect('order.user', 'user')
       .where('order.consumer_group_id = :groupId', { groupId });
 
@@ -221,7 +233,7 @@ export class OrdersService {
   async updateDelivery(id: string, isDelivered: boolean): Promise<OrderResponseDto> {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['items', 'user'],
+      relations: ['items', 'items.period', 'user'],
     });
 
     if (!order) {
