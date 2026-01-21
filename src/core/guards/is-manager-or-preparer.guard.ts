@@ -65,13 +65,15 @@ export class IsManagerOrPreparerGuard implements CanActivate {
     }
 
     // Si estem en un endpoint de comandes (PATCH /orders/:id/delivery o DELETE /orders/:id)
+    // o DELETE /orders/:orderId/items/:articleId
     // i no tenim groupId, intentar obtenir-lo de la comanda
-    if (!groupId && isOrdersEndpoint && request.params.id && (routePath.includes('/delivery') || request.method === 'DELETE')) {
+    const orderId = request.params.orderId || request.params.id;
+    if (!groupId && isOrdersEndpoint && orderId && (routePath.includes('/delivery') || request.method === 'DELETE' || routePath.includes('/items/'))) {
       try {
         const ordersRepository = this.moduleRef.get<Repository<Order>>(getRepositoryToken(Order), { strict: false });
         if (ordersRepository) {
           const order = await ordersRepository.findOne({
-            where: { id: request.params.id },
+            where: { id: orderId },
             select: ['consumerGroupId'],
           });
           if (order) {
