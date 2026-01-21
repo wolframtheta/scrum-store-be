@@ -21,6 +21,7 @@ export class IsManagerGuard implements CanActivate {
     const routePath = request.route?.path || '';
     const isArticlesEndpoint = routePath.includes('/articles/');
     const isOrdersEndpoint = routePath.includes('/orders/');
+    const isNormalizeEndpoint = routePath.includes('/normalize');
     
     // Handle case when body is an array (batch operations)
     let groupId = request.params.groupId || request.body?.consumerGroupId || request.body?.groupId;
@@ -93,6 +94,7 @@ export class IsManagerGuard implements CanActivate {
     this.logger.debug(`IsManagerGuard - User: ${JSON.stringify(user)}`);
     this.logger.debug(`IsManagerGuard - Route path: ${routePath}`);
     this.logger.debug(`IsManagerGuard - Is articles endpoint: ${isArticlesEndpoint}`);
+    this.logger.debug(`IsManagerGuard - Is normalize endpoint: ${isNormalizeEndpoint}`);
     this.logger.debug(`IsManagerGuard - Group ID from params.id: ${request.params.id}`);
     this.logger.debug(`IsManagerGuard - Group ID from params.groupId: ${request.params.groupId}`);
     this.logger.debug(`IsManagerGuard - Group ID from body.consumerGroupId: ${request.body?.consumerGroupId}`);
@@ -101,6 +103,16 @@ export class IsManagerGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException('User not authenticated');
+    }
+
+    // Para el endpoint de normalización, solo verificamos que el usuario sea manager de al menos un grupo
+    if (isNormalizeEndpoint) {
+      const managerGroups = await this.consumerGroupsService.findManagerGroups(user.email);
+      if (managerGroups.length === 0) {
+        throw new ForbiddenException('User must be a manager of at least one group to normalize articles');
+      }
+      this.logger.debug(`IsManagerGuard - User is manager of ${managerGroups.length} groups, allowing normalize`);
+      return true;
     }
 
     if (!groupId) {
