@@ -142,44 +142,45 @@ docker push ${FULL_IMAGE_NAME}
 docker push ${LATEST_TAG}
 
 echo "✅ Backend image uploaded to registry with tag: ${IMAGE_TAG}!"
-
-# Commit, tag y push al final (solo si todo fue bien)
 echo ""
+echo "🎉 Docker build and push completed successfully!"
+echo ""
+
+# Commit, tag y push AL FINAL (solo si Docker fue exitoso)
 echo "📝 Committing changes (package.json + version.json)..."
 cd "$SCRIPT_DIR"
-if [ -d ".git" ]; then
-  # Añadir package.json y version.json al staging
-  git add package.json version.json
-  
-  # Commit con todos los cambios (usando major.minor)
-  git commit -m "chore: bump version to ${GIT_TAG} (${VERSION_TYPE})" || {
-    echo "⚠️  Warning: No hay cambios para commitear"
-  }
 
-  # Crear tag si no existe
-  if git rev-parse "$GIT_TAG" >/dev/null 2>&1; then
-    echo "⚠️  Warning: El tag ${GIT_TAG} ya existe. Eliminando tag local para recrearlo..."
-    git tag -d "${GIT_TAG}" 2>/dev/null || true
-  fi
-  
-  echo "🏷️  Creating git tag: ${GIT_TAG}"
-  git tag -a "${GIT_TAG}" -m "Release ${GIT_TAG} - ${TIMESTAMP}"
-  
-  # Hacer push del commit y tag al remoto
-  echo "⬆️  Pushing commit and tag to remote..."
-  git push origin HEAD || {
-    echo "❌ Error: No se pudo hacer push del commit."
-    exit 1
-  }
-  git push origin "${GIT_TAG}" || {
-    echo "❌ Error: No se pudo hacer push del tag."
-    exit 1
-  }
-  echo "✅ Commit and tag pushed successfully!"
+# Añadir package.json y version.json al staging
+git add package.json version.json
+
+# Verificar si hay cambios para commitear
+if git diff --staged --quiet; then
+  echo "⚠️  Warning: No hay cambios para commitear"
 else
-  echo "⚠️  Warning: No se encontró repositorio git en el proyecto"
+  # Commit con mensaje descriptivo
+  git commit -m "chore(backend): bump version to ${VERSION} (${VERSION_TYPE})
+
+- Version: ${CURRENT_VERSION} → ${VERSION}
+- Build: ${BUILD_TAG}
+- Branch: ${CURRENT_BRANCH}"
+  
+  echo "✅ Commit realizado exitosamente"
 fi
 
+# Crear tag si no existe
+if git rev-parse "$GIT_TAG" >/dev/null 2>&1; then
+  echo "⚠️  Warning: El tag ${GIT_TAG} ya existe. Eliminando tag local para recrearlo..."
+  git tag -d "${GIT_TAG}" 2>/dev/null || true
+fi
+
+echo "🏷️  Creating git tag: ${GIT_TAG}"
+git tag -a "${GIT_TAG}" -m "Release ${GIT_TAG} - Backend ${VERSION} - ${TIMESTAMP}"
+
+# Hacer push del commit y tag al remoto
+echo "⬆️  Pushing commit and tag to remote..."
+git push origin HEAD && git push origin "${GIT_TAG}"
+
+echo "✅ Commit and tag pushed successfully!"
 echo ""
 echo "🎉 All done! Version ${VERSION} deployed successfully!"
 
