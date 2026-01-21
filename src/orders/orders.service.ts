@@ -266,6 +266,71 @@ export class OrdersService {
     });
   }
 
+  async markAsPaid(id: string): Promise<OrderResponseDto> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const order = await queryRunner.manager.findOne(Order, {
+        where: { id },
+        relations: ['items', 'items.article', 'items.period', 'user'],
+      });
+
+      if (!order) {
+        throw new NotFoundException(`Order with ID ${id} not found`);
+      }
+
+      // Calculate total with tax for each item
+      const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+      
+      let totalPaid = 0;
+      for (const item of validItems) {
+        const itemSubtotal = Number(item.totalPrice || 0);
+        const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+        const itemTax = itemSubtotal * (taxRate / 100);
+        const itemTotalWithTax = itemSubtotal + itemTax;
+        
+        // Mark item as fully paid
+        item.paidAmount = Number(itemTotalWithTax.toFixed(2));
+        totalPaid += itemTotalWithTax;
+      }
+
+      // Update order payment status
+      order.paidAmount = Number(totalPaid.toFixed(2));
+      order.paymentStatus = PaymentStatus.PAID;
+
+      // Save items and order
+      await queryRunner.manager.save(validItems);
+      await queryRunner.manager.save(order);
+
+      await queryRunner.commitTransaction();
+
+      // Reload order with all relations
+      const updatedOrder = await this.ordersRepository.findOne({
+        where: { id },
+        relations: ['items', 'items.article', 'items.period', 'user'],
+      });
+
+      if (!updatedOrder) {
+        throw new NotFoundException('Order not found after marking as paid');
+      }
+
+      const reloadedValidItems = (updatedOrder.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+
+      return new OrderResponseDto({
+        ...updatedOrder,
+        userName: updatedOrder.user ? `${updatedOrder.user.name} ${updatedOrder.user.surname}` : undefined,
+        items: reloadedValidItems.map(item => this.mapOrderItemToDto(item)),
+      });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async delete(id: string): Promise<void> {
     const order = await this.ordersRepository.findOne({
       where: { id },

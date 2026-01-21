@@ -90,5 +90,21 @@ export class OrdersController {
   ): Promise<OrderResponseDto> {
     return this.ordersService.updateDelivery(id, isDelivered);
   }
+
+  @Patch(':id/mark-as-paid')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Marcar comanda como pagada',
+    description: 'Marca una comanda como completamente pagada. Solo gestores y preparadores pueden marcar comandas como pagadas.',
+  })
+  @ApiResponse({ status: 200, description: 'Comanda marcada como pagada exitosamente', type: OrderResponseDto })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Comanda no encontrada' })
+  markAsPaid(
+    @Param('id', ParseUUIDPipe) id: string
+  ): Promise<OrderResponseDto> {
+    return this.ordersService.markAsPaid(id);
+  }
 }
 
