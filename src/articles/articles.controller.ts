@@ -22,7 +22,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { ArticleResponseDto } from './dto/article-response.dto';
 import { PriceHistoryResponseDto } from './dto/price-history-response.dto';
-import { BatchDeleteDto, BatchToggleShowcaseDto, BatchToggleSeasonalDto, BatchToggleEcoDto, BatchSearchImagesDto } from './dto/batch-actions.dto';
+import { BatchDeleteDto, BatchToggleShowcaseDto, BatchToggleSeasonalDto, BatchToggleEcoDto } from './dto/batch-actions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { IsManagerGuard } from '../core/guards/is-manager.guard';
 import { StorageService } from '../storage/storage.service';
@@ -311,29 +311,6 @@ export class ArticlesController {
     return this.articlesService.deleteImage(id);
   }
 
-  @Post(':id/search-image')
-  @UseGuards(IsManagerGuard)
-  @ApiOperation({
-    summary: 'Buscar y actualizar imagen del artículo automáticamente',
-    description: 'Solo gestores pueden buscar imágenes. Busca una imagen relacionada con el producto y la actualiza.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Imagen buscada y actualizada exitosamente',
-    type: ArticleResponseDto,
-  })
-  @ApiResponse({ status: 401, description: 'No autorizado' })
-  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
-  @ApiResponse({ status: 404, description: 'Artículo no encontrado' })
-  async searchImage(@Param('id', ParseUUIDPipe) id: string, @Request() req): Promise<ArticleResponseDto> {
-    const isOwner = await this.articlesService.verifyArticleOwnership(id, req.user.email);
-    if (!isOwner) {
-      throw new ForbiddenException('You are not a manager of this consumer group');
-    }
-
-    return this.articlesService.searchAndUpdateImage(id);
-  }
-
   @Post('batch/delete')
   @UseGuards(IsManagerGuard)
   @ApiOperation({
@@ -457,37 +434,6 @@ export class ArticlesController {
     }
 
     return this.articlesService.batchToggleEco(batchDto.articleIds, batchDto.isEco);
-  }
-
-  @Post('batch/search-images')
-  @UseGuards(IsManagerGuard)
-  @ApiOperation({
-    summary: 'Buscar imágenes de múltiples artículos en batch',
-    description: 'Solo gestores pueden buscar imágenes. Busca y actualiza imágenes para múltiples artículos.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Búsqueda de imágenes completada',
-    schema: {
-      type: 'object',
-      properties: {
-        updated: { type: 'number', example: 5 },
-        failed: { type: 'number', example: 0 },
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'No autorizado' })
-  @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
-  async batchSearchImages(@Body() batchDto: BatchSearchImagesDto, @Request() req): Promise<{ updated: number; failed: number }> {
-    // Verificar que l'usuari és manager de tots els grups dels articles
-    for (const articleId of batchDto.articleIds) {
-      const isOwner = await this.articlesService.verifyArticleOwnership(articleId, req.user.email);
-      if (!isOwner) {
-        throw new ForbiddenException(`You are not a manager of the consumer group for article ${articleId}`);
-      }
-    }
-
-    return this.articlesService.batchSearchImages(batchDto.articleIds);
   }
 }
 

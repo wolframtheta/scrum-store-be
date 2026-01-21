@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
 
 const writeFile = promisify(fs.writeFile);
 const unlink = promisify(fs.unlink);
@@ -86,50 +85,6 @@ export class StorageService {
   getFilePath(fileUrl: string): string {
     const urlPath = fileUrl.replace(this.baseUrl, '');
     return path.join(this.uploadPath, urlPath);
-  }
-
-  async downloadAndSaveImage(imageUrl: string, folder: string, filename: string): Promise<string> {
-    try {
-      const response = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        timeout: 10000,
-        maxRedirects: 5,
-      });
-      let fileExtension = '.jpg';
-      const contentType = response.headers['content-type'];
-      if (contentType) {
-        if (contentType.includes('jpeg') || contentType.includes('jpg')) {
-          fileExtension = '.jpg';
-        } else if (contentType.includes('png')) {
-          fileExtension = '.png';
-        } else if (contentType.includes('webp')) {
-          fileExtension = '.webp';
-        } else if (contentType.includes('gif')) {
-          fileExtension = '.gif';
-        }
-      } else {
-        const urlPath = new URL(imageUrl).pathname;
-        const urlExt = path.extname(urlPath).toLowerCase();
-        if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(urlExt)) {
-          fileExtension = urlExt;
-        }
-      }
-      const maxSize = 5 * 1024 * 1024;
-      if (response.data.length > maxSize) {
-        throw new BadRequestException('Downloaded image is too large (max 5MB)');
-      }
-      const folderPath = path.join(this.uploadPath, folder);
-      if (!fs.existsSync(folderPath)) {
-        await mkdir(folderPath, { recursive: true });
-      }
-      const fullFilename = `${filename}${fileExtension}`;
-      const filePath = path.join(folderPath, fullFilename);
-      await writeFile(filePath, Buffer.from(response.data));
-      return `${this.baseUrl}/${folder}/${fullFilename}`;
-    } catch (error) {
-      this.logger.error(`Error downloading image from ${imageUrl}:`, error);
-      throw new BadRequestException(`Failed to download image: ${error.message}`);
-    }
   }
 }
 

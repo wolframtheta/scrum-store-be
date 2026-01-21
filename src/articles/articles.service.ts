@@ -10,7 +10,6 @@ import { PriceHistoryResponseDto } from './dto/price-history-response.dto';
 import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
 import { PeriodsService } from '../periods/periods.service';
 import { StorageService } from '../storage/storage.service';
-import { ImageSearchService } from '../storage/image-search.service';
 
 @Injectable()
 export class ArticlesService {
@@ -25,7 +24,6 @@ export class ArticlesService {
     @Inject(forwardRef(() => PeriodsService))
     private readonly periodsService: PeriodsService,
     private readonly storageService: StorageService,
-    private readonly imageSearchService: ImageSearchService,
   ) {}
 
   /**
@@ -90,44 +88,6 @@ export class ArticlesService {
 
     // Save initial price in history
     await this.savePriceHistory(savedArticle.id, savedArticle.pricePerUnit);
-
-    // Buscar y guardar imagen automáticamente si no se proporcionó una
-    if (!savedArticle.image) {
-      try {
-        const searchQuery = this.imageSearchService.generateSearchQuery({
-          product: savedArticle.product,
-          category: savedArticle.category,
-          variety: savedArticle.variety,
-        });
-
-        this.logger.log(`Searching image for article ${savedArticle.id} with query: "${searchQuery}"`);
-        const imageUrl = await this.imageSearchService.searchImage(searchQuery);
-
-        if (imageUrl) {
-          try {
-            // Descargar y guardar la imagen con el ID del artículo como nombre
-            const savedImageUrl = await this.storageService.downloadAndSaveImage(
-              imageUrl,
-              'articles',
-              savedArticle.id,
-            );
-
-            // Actualizar el artículo con la URL de la imagen
-            savedArticle.image = savedImageUrl;
-            await this.articlesRepository.save(savedArticle);
-            this.logger.log(`Image saved successfully for article ${savedArticle.id}`);
-          } catch (error) {
-            this.logger.warn(`Failed to download/save image for article ${savedArticle.id}:`, error.message);
-            // Continuar sin imagen si falla la descarga
-          }
-        } else {
-          this.logger.warn(`No image found for article ${savedArticle.id} with query: "${searchQuery}"`);
-        }
-      } catch (error) {
-        this.logger.error(`Error searching image for article ${savedArticle.id}:`, error);
-        // Continuar sin imagen si falla la búsqueda
-      }
-    }
 
     // Recarregar amb relacions per obtenir noms del productor i proveidor
     const articleWithRelations = await this.articlesRepository.findOne({
@@ -395,85 +355,6 @@ export class ArticlesService {
     const updatedArticle = await this.articlesRepository.save(article);
 
     return new ArticleResponseDto(updatedArticle);
-  }
-
-  /**
-   * Busca y actualiza la imagen de un artículo automáticamente
-   */
-  async searchAndUpdateImage(id: string): Promise<ArticleResponseDto> {
-    const article = await this.articlesRepository.findOne({ where: { id } });
-
-    if (!article) {
-      throw new NotFoundException(`Article with ID ${id} not found`);
-    }
-
-    try {
-      const searchQuery = this.imageSearchService.generateSearchQuery({
-        product: article.product,
-        category: article.category,
-        variety: article.variety,
-      });
-
-      this.logger.log(`Searching image for article ${id} with query: "${searchQuery}"`);
-      const imageUrl = await this.imageSearchService.searchImage(searchQuery);
-
-      if (imageUrl) {
-        try {
-          // Primero descargar y guardar la nueva imagen (más seguro: no eliminar la anterior hasta confirmar que la nueva funciona)
-          const savedImageUrl = await this.storageService.downloadAndSaveImage(
-            imageUrl,
-            'articles',
-            article.id,
-          );
-
-          // Solo si la descarga fue exitosa, eliminar la imagen anterior (si existe)
-          if (article.image && article.image !== savedImageUrl) {
-            try {
-              await this.storageService.deleteFile(article.image);
-            } catch (deleteError) {
-              // Si falla eliminar la anterior, solo loguear pero continuar (la nueva ya está guardada)
-              this.logger.warn(`Failed to delete old image for article ${id}:`, deleteError.message);
-            }
-          }
-
-          // Actualizar el artículo con la URL de la nueva imagen
-          article.image = savedImageUrl;
-          const updatedArticle = await this.articlesRepository.save(article);
-          this.logger.log(`Image updated successfully for article ${id}`);
-
-          return new ArticleResponseDto(updatedArticle);
-        } catch (error) {
-          this.logger.warn(`Failed to download/save image for article ${id}:`, error.message);
-          throw new Error(`Failed to download/save image: ${error.message}`);
-        }
-      } else {
-        this.logger.warn(`No image found for article ${id} with query: "${searchQuery}"`);
-        throw new Error(`No image found for query: "${searchQuery}"`);
-      }
-    } catch (error) {
-      this.logger.error(`Error searching image for article ${id}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Busca y actualiza imágenes de múltiples artículos en batch
-   */
-  async batchSearchImages(articleIds: string[]): Promise<{ updated: number; failed: number }> {
-    let updated = 0;
-    let failed = 0;
-
-    for (const id of articleIds) {
-      try {
-        await this.searchAndUpdateImage(id);
-        updated++;
-      } catch (error) {
-        this.logger.error(`Error searching image for article ${id}:`, error);
-        failed++;
-      }
-    }
-
-    return { updated, failed };
   }
 
   async deleteImage(id: string): Promise<ArticleResponseDto> {
