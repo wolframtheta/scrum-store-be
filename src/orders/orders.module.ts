@@ -7,6 +7,7 @@ import { OrderItem } from './entities/order-item.entity';
 import { ArticlesModule } from '../articles/articles.module';
 import { ConsumerGroupsModule } from '../consumer-groups/consumer-groups.module';
 import { UsersModule } from '../users/users.module';
+import { PeriodsModule } from '../periods/periods.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { UsersModule } from '../users/users.module';
     forwardRef(() => ArticlesModule),
     forwardRef(() => ConsumerGroupsModule),
     forwardRef(() => UsersModule),
+    PeriodsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

@@ -41,6 +41,7 @@ import { AddManatUnitMeasure1737100000000 } from '../migrations/1737100000000-Ad
 import { AddPeriodIdToOrderItems1737200000000 } from '../migrations/1737200000000-AddPeriodIdToOrderItems';
 import { RenameTaxIdToCif1737300000000 } from '../migrations/1737300000000-RenameTaxIdToCif';
 import { AddHashToArticles1737400000000 } from '../migrations/1737400000000-AddHashToArticles';
+import { AddTransportCostToPeriods1737500000000 } from '../migrations/1737500000000-AddTransportCostToPeriods';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -85,6 +86,7 @@ export const AppDataSource = new DataSource({
     AddPeriodIdToOrderItems1737200000000,
     RenameTaxIdToCif1737300000000,
     AddHashToArticles1737400000000,
+    AddTransportCostToPeriods1737500000000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',

@@ -44,6 +44,7 @@ export class PeriodsService {
       endDate,
       deliveryDate,
       recurrence: createPeriodDto.recurrence || PeriodRecurrence.CUSTOM,
+      transportCost: createPeriodDto.transportCost ?? undefined,
     });
 
     const savedPeriod = await this.periodsRepository.save(period);
@@ -140,6 +141,9 @@ export class PeriodsService {
       endDate: updatePeriodDto.endDate ? new Date(updatePeriodDto.endDate) : periodEntity.endDate,
       deliveryDate: updatePeriodDto.deliveryDate ? new Date(updatePeriodDto.deliveryDate) : periodEntity.deliveryDate,
       recurrence: updatePeriodDto.recurrence ?? periodEntity.recurrence,
+      transportCost: updatePeriodDto.transportCost !== undefined 
+        ? (updatePeriodDto.transportCost === null ? undefined : updatePeriodDto.transportCost)
+        : periodEntity.transportCost,
     });
 
     await this.periodsRepository.save(periodEntity);

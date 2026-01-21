@@ -61,6 +61,10 @@ export class PeriodResponseDto {
   @Expose()
   recurrence: PeriodRecurrence;
 
+  @ApiPropertyOptional({ example: 25.50, description: 'Cost de transport per aquest període' })
+  @Expose()
+  transportCost?: number;
+
   @ApiPropertyOptional({ type: [PeriodArticleResponseDto] })
   @Expose()
   @Type(() => PeriodArticleResponseDto)

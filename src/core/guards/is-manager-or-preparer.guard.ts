@@ -23,7 +23,7 @@ export class IsManagerOrPreparerGuard implements CanActivate {
     const isOrdersEndpoint = routePath.includes('/orders/');
     
     // Handle case when body is an array (batch operations)
-    let groupId = request.params.groupId || request.body?.consumerGroupId || request.body?.groupId;
+    let groupId = request.params.groupId || request.query?.groupId || request.body?.consumerGroupId || request.body?.groupId;
     
     // If body is an array (like in batch operations), get consumerGroupId from first element
     if (!groupId && Array.isArray(request.body) && request.body.length > 0) {
@@ -97,6 +97,7 @@ export class IsManagerOrPreparerGuard implements CanActivate {
     this.logger.debug(`IsManagerOrPreparerGuard - Is articles endpoint: ${isArticlesEndpoint}`);
     this.logger.debug(`IsManagerOrPreparerGuard - Group ID from params.id: ${request.params.id}`);
     this.logger.debug(`IsManagerOrPreparerGuard - Group ID from params.groupId: ${request.params.groupId}`);
+    this.logger.debug(`IsManagerOrPreparerGuard - Group ID from query.groupId: ${request.query?.groupId}`);
     this.logger.debug(`IsManagerOrPreparerGuard - Group ID from body.consumerGroupId: ${request.body?.consumerGroupId}`);
     this.logger.debug(`IsManagerOrPreparerGuard - Group ID from body.groupId: ${request.body?.groupId}`);
     this.logger.debug(`IsManagerOrPreparerGuard - Final Group ID: ${groupId}`);

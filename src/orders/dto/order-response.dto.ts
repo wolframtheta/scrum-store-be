@@ -110,6 +110,10 @@ export class OrderResponseDto {
   @Expose()
   paidAmount: number;
 
+  @ApiPropertyOptional({ example: 2.50, description: 'Cost de transport repartit per aquesta comanda' })
+  @Expose()
+  transportCost?: number;
+
   @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.PARTIAL })
   @Expose()
   paymentStatus: PaymentStatus;

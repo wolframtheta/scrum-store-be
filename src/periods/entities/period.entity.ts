@@ -40,6 +40,9 @@ export class Period {
   @Column({ type: 'enum', enum: PeriodRecurrence, default: PeriodRecurrence.CUSTOM })
   recurrence: PeriodRecurrence;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, name: 'transport_cost' })
+  transportCost?: number;
+
   @OneToMany(() => PeriodArticle, periodArticle => periodArticle.period, { cascade: true })
   periodArticles: PeriodArticle[];
 

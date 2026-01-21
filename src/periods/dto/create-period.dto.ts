@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsUUID, IsDateString, IsEnum, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsNotEmpty, IsUUID, IsDateString, IsEnum, IsOptional, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PeriodRecurrence } from '../entities/period.entity';
 
@@ -59,6 +59,12 @@ export class CreatePeriodDto {
   @IsEnum(PeriodRecurrence)
   @IsOptional()
   recurrence?: PeriodRecurrence;
+
+  @ApiPropertyOptional({ example: 25.50, description: 'Cost de transport per aquest període (es repartirà entre totes les comandes)' })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  transportCost?: number;
 
   @ApiPropertyOptional({ type: [CreatePeriodArticleDto], description: 'Artículos asociados al período con sus precios' })
   @IsArray()

@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, ValidationPipe, Query, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, ValidationPipe, Query, ParseUUIDPipe, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
+import { PeriodPaymentSummaryDto } from './dto/period-payment-summary.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PaymentStatus } from './entities/order.entity';
@@ -39,6 +40,80 @@ export class OrdersController {
     @Query('paymentStatus') paymentStatus?: PaymentStatus
   ): Promise<OrderResponseDto[]> {
     return this.ordersService.findByGroup(groupId, paymentStatus);
+  }
+
+  @Get('by-period/:periodId')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Obtenir resum de pagaments per període',
+    description: 'Retorna un resum de què ha de pagar cada usuari per un període determinat, incloent subtotals i transport.',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Resum de pagaments retornat exitosament', 
+    type: PeriodPaymentSummaryDto 
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Període no encontrado' })
+  getPeriodPaymentSummary(
+    @Param('periodId', ParseUUIDPipe) periodId: string,
+    @Query('groupId') groupId: string
+  ): Promise<PeriodPaymentSummaryDto> {
+    if (!groupId) {
+      throw new BadRequestException('groupId is required');
+    }
+    return this.ordersService.getPeriodPaymentSummary(periodId, groupId);
+  }
+
+  @Patch('by-period/:periodId/user/:userId/mark-as-paid')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Marcar comandes d\'un període i usuari com a pagades',
+    description: 'Marca totes les comandes d\'un període i usuari com a pagades. Només afecta els items que pertanyen al període especificat.',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Comandes marcades com a pagades exitosament', 
+    type: PeriodPaymentSummaryDto 
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Període o usuari no encontrado' })
+  markPeriodUserOrdersAsPaid(
+    @Param('periodId', ParseUUIDPipe) periodId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('groupId') groupId: string
+  ): Promise<PeriodPaymentSummaryDto> {
+    if (!groupId) {
+      throw new BadRequestException('groupId is required');
+    }
+    return this.ordersService.markPeriodOrdersAsPaid(periodId, userId, groupId);
+  }
+
+  @Patch('by-period/:periodId/user/:userId/mark-as-unpaid')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Marcar comandes d\'un període i usuari com a no pagades',
+    description: 'Marca totes les comandes d\'un període i usuari com a no pagades. Només afecta els items que pertanyen al període especificat.',
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Comandes marcades com a no pagades exitosament', 
+    type: PeriodPaymentSummaryDto 
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Període o usuari no encontrado' })
+  markPeriodUserOrdersAsUnpaid(
+    @Param('periodId', ParseUUIDPipe) periodId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query('groupId') groupId: string
+  ): Promise<PeriodPaymentSummaryDto> {
+    if (!groupId) {
+      throw new BadRequestException('groupId is required');
+    }
+    return this.ordersService.markPeriodOrdersAsUnpaid(periodId, userId, groupId);
   }
 
   @Delete(':orderId/items/:itemId')

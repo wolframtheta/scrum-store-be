@@ -9,6 +9,8 @@ import { ArticlesService } from '../articles/articles.service';
 import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
 import { UsersService } from '../users/users.service';
 import { ArticleResponseDto } from '../articles/dto/article-response.dto';
+import { PeriodsService } from '../periods/periods.service';
+import { PeriodPaymentSummaryDto, UserPaymentSummaryDto } from './dto/period-payment-summary.dto';
 
 @Injectable()
 export class OrdersService {
@@ -20,6 +22,7 @@ export class OrdersService {
     private readonly articlesService: ArticlesService,
     private readonly consumerGroupsService: ConsumerGroupsService,
     private readonly usersService: UsersService,
+    private readonly periodsService: PeriodsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -42,6 +45,60 @@ export class OrdersService {
       totalPrice: item.totalPrice,
       paidAmount: item.paidAmount,
     });
+  }
+
+  /**
+   * Calcula el cost de transport per una comanda.
+   * Reparteix el cost de transport de cada període entre tots els usuaris únics que han fet comandes en aquell període i proveïdor.
+   */
+  private async calculateTransportCostForOrder(order: Order): Promise<number> {
+    if (!order.items || order.items.length === 0) {
+      return 0;
+    }
+
+    // Agrupar items per període
+    const periodMap = new Map<string, { transportCost: number; supplierId: string }>();
+
+    // Recopilar períodes únics amb el seu cost de transport
+    for (const item of order.items) {
+      if (!item.period || !item.period.transportCost) continue;
+
+      const periodId = item.period.id;
+      const transportCost = Number(item.period.transportCost);
+      const supplierId = item.period.supplierId;
+
+      if (!periodMap.has(periodId)) {
+        periodMap.set(periodId, { transportCost, supplierId });
+      }
+    }
+
+    if (periodMap.size === 0) {
+      return 0;
+    }
+
+    // Per cada període únic, calcular la part proporcional
+    let totalTransportCost = 0;
+
+    for (const [periodId, periodInfo] of periodMap) {
+      // Comptar quantes usuaris únics hi ha en aquest període i proveïdor
+      const uniqueUsersInPeriod = await this.ordersRepository
+        .createQueryBuilder('order')
+        .innerJoin('order.items', 'item')
+        .where('item.period_id = :periodId', { periodId })
+        .andWhere('order.consumer_group_id = :groupId', { groupId: order.consumerGroupId })
+        .select('DISTINCT order.user_id', 'userId')
+        .getRawMany();
+
+      const userCount = uniqueUsersInPeriod.length;
+
+      if (userCount > 0) {
+        // Repartir el cost entre tots els usuaris únics
+        const costPerUser = periodInfo.transportCost / userCount;
+        totalTransportCost += Number(costPerUser.toFixed(2));
+      }
+    }
+
+    return Number(totalTransportCost.toFixed(2));
   }
 
   async create(userId: string, createDto: CreateOrderDto): Promise<OrderResponseDto> {
@@ -139,10 +196,13 @@ export class OrdersService {
         throw new NotFoundException('Order not found after creation');
       }
 
+      const transportCost = await this.calculateTransportCostForOrder(completeOrder);
+
       return new OrderResponseDto({
         ...completeOrder,
         userName: completeOrder.user ? `${completeOrder.user.name} ${completeOrder.user.surname}` : undefined,
         items: completeOrder.items.map(item => this.mapOrderItemToDto(item)),
+        transportCost,
       });
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -169,16 +229,19 @@ export class OrdersService {
 
     const orders = await queryBuilder.getMany();
 
-    return orders.map(order => {
+    return Promise.all(orders.map(async order => {
       // Filter out items with null articleId (deleted items)
       const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+      
+      const transportCost = await this.calculateTransportCostForOrder(order);
       
       return new OrderResponseDto({
         ...order,
         userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
         items: validItems.map(item => this.mapOrderItemToDto(item)),
+        transportCost,
       });
-    });
+    }));
   }
 
   async findOne(id: string, userId: string): Promise<OrderResponseDto> {
@@ -207,10 +270,13 @@ export class OrdersService {
     // Filter out items with null articleId (deleted items)
     const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
     
+    const transportCost = await this.calculateTransportCostForOrder(order);
+    
     return new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
       items: validItems.map(item => this.mapOrderItemToDto(item)),
+      transportCost,
     });
   }
 
@@ -231,16 +297,19 @@ export class OrdersService {
 
     const orders = await queryBuilder.getMany();
 
-    return orders.map(order => {
+    return Promise.all(orders.map(async order => {
       // Filter out items with null articleId (deleted items)
       const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+      
+      const transportCost = await this.calculateTransportCostForOrder(order);
       
       return new OrderResponseDto({
         ...order,
         userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
         items: validItems.map(item => this.mapOrderItemToDto(item)),
+        transportCost,
       });
-    });
+    }));
   }
 
   async updateDelivery(id: string, isDelivered: boolean): Promise<OrderResponseDto> {
@@ -259,10 +328,13 @@ export class OrdersService {
     // Filter out items with null articleId (deleted items)
     const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
 
+    const transportCost = await this.calculateTransportCostForOrder(order);
+
     return new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
       items: validItems.map(item => this.mapOrderItemToDto(item)),
+      transportCost,
     });
   }
 
@@ -318,10 +390,13 @@ export class OrdersService {
 
       const reloadedValidItems = (updatedOrder.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
 
+      const transportCost = await this.calculateTransportCostForOrder(updatedOrder);
+
       return new OrderResponseDto({
         ...updatedOrder,
         userName: updatedOrder.user ? `${updatedOrder.user.name} ${updatedOrder.user.surname}` : undefined,
         items: reloadedValidItems.map(item => this.mapOrderItemToDto(item)),
+        transportCost,
       });
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -433,10 +508,13 @@ export class OrdersService {
       // Filter out items with null articleId (deleted items)
       const validItems = (updatedOrder.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
 
+      const transportCost = await this.calculateTransportCostForOrder(updatedOrder);
+
       return new OrderResponseDto({
         ...updatedOrder,
         userName: updatedOrder.user ? `${updatedOrder.user.name} ${updatedOrder.user.surname}` : undefined,
         items: validItems.map(item => this.mapOrderItemToDto(item)),
+        transportCost,
       });
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -470,5 +548,301 @@ export class OrdersService {
     // Delete the first matching item (or all if needed)
     // For now, delete the first one to maintain backward compatibility
     return this.deleteOrderItemById(orderId, itemsToDelete[0].id);
+  }
+
+  /**
+   * Calcula el resum de pagaments per període, agrupant per usuari.
+   * Retorna el subtotal de cada comanda, el transport repartit i el total per usuari.
+   */
+  async getPeriodPaymentSummary(periodId: string, groupId: string): Promise<PeriodPaymentSummaryDto> {
+    // Obtenir informació del període
+    const period = await this.periodsService.findOne(periodId, groupId);
+    if (!period) {
+      throw new NotFoundException(`Period with ID ${periodId} not found`);
+    }
+
+    // Obtenir totes les comandes del grup que tenen items d'aquest període
+    const orders = await this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('items.period', 'period')
+      .where('order.consumer_group_id = :groupId', { groupId })
+      .andWhere('items.period_id = :periodId', { periodId })
+      .getMany();
+
+    // Filtrar comandes que tenen items vàlids d'aquest període
+    const ordersWithPeriodItems = orders.filter(order => 
+      order.items && order.items.some(item => 
+        item.periodId === periodId && 
+        item.articleId !== null && 
+        item.articleId !== undefined
+      )
+    );
+
+    // Agrupar per usuari
+    const userMap = new Map<string, {
+      userId: string;
+      userName: string;
+      orders: Order[];
+      subtotal: number;
+    }>();
+
+    for (const order of ordersWithPeriodItems) {
+      if (!order.user) continue;
+
+      const userId = order.userId;
+      const userName = `${order.user.name} ${order.user.surname}`;
+
+      if (!userMap.has(userId)) {
+        userMap.set(userId, {
+          userId,
+          userName,
+          orders: [],
+          subtotal: 0,
+        });
+      }
+
+      const userData = userMap.get(userId)!;
+      userData.orders.push(order);
+      
+      // Sumar només el subtotal dels items d'aquest període
+      const periodItemsSubtotal = order.items
+        .filter(item => item.periodId === periodId && item.articleId !== null)
+        .reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+      
+      userData.subtotal += periodItemsSubtotal;
+    }
+
+    // Calcular el cost de transport repartit per usuari
+    // El transport es reparteix entre tots els usuaris únics que tenen comandes en aquest període
+    const uniqueUserIds = Array.from(userMap.keys());
+    const transportCost = period.transportCost ? Number(period.transportCost) : 0;
+    const transportCostPerUser = uniqueUserIds.length > 0 
+      ? Number((transportCost / uniqueUserIds.length).toFixed(2))
+      : 0;
+
+    // Crear resum per usuari
+    const userSummaries: UserPaymentSummaryDto[] = Array.from(userMap.values()).map(userData => {
+      const total = Number((userData.subtotal + transportCostPerUser).toFixed(2));
+      
+      // Calcular quantitat pagada i estat de pagament
+      let paidAmount = 0;
+      let allPaid = true;
+      let anyPaid = false;
+      
+      for (const order of userData.orders) {
+        paidAmount += Number(order.paidAmount || 0);
+        if (order.paymentStatus !== PaymentStatus.PAID) {
+          allPaid = false;
+        }
+        if (order.paymentStatus === PaymentStatus.PAID || order.paymentStatus === PaymentStatus.PARTIAL) {
+          anyPaid = true;
+        }
+      }
+      
+      // Determinar estat de pagament general
+      let paymentStatus: PaymentStatus;
+      if (allPaid && userData.orders.length > 0) {
+        paymentStatus = PaymentStatus.PAID;
+      } else if (anyPaid) {
+        paymentStatus = PaymentStatus.PARTIAL;
+      } else {
+        paymentStatus = PaymentStatus.UNPAID;
+      }
+      
+      return new UserPaymentSummaryDto({
+        userId: userData.userId,
+        userName: userData.userName,
+        subtotal: Number(userData.subtotal.toFixed(2)),
+        transportCost: transportCostPerUser,
+        total,
+        ordersCount: userData.orders.length,
+        paidAmount: Number(paidAmount.toFixed(2)),
+        paymentStatus,
+        orderIds: userData.orders.map(o => o.id),
+      });
+    });
+
+    // Ordenar per nom d'usuari
+    userSummaries.sort((a, b) => a.userName.localeCompare(b.userName));
+
+    // Calcular totals generals
+    const totalSubtotal = userSummaries.reduce((sum, u) => sum + u.subtotal, 0);
+    const totalTransportCost = transportCost;
+    const grandTotal = Number((totalSubtotal + totalTransportCost).toFixed(2));
+
+    return new PeriodPaymentSummaryDto({
+      periodId: period.id,
+      periodName: period.name,
+      users: userSummaries,
+      totalSubtotal: Number(totalSubtotal.toFixed(2)),
+      totalTransportCost: Number(totalTransportCost.toFixed(2)),
+      grandTotal,
+    });
+  }
+
+  /**
+   * Marca totes les comandes d'un període i usuari com a pagades.
+   * Només marca els items que pertanyen al període especificat.
+   */
+  async markPeriodOrdersAsPaid(periodId: string, userId: string, groupId: string): Promise<PeriodPaymentSummaryDto> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Obtenir totes les comandes del usuari al grup que tenen items d'aquest període
+      const orders = await this.ordersRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.items', 'items')
+        .leftJoinAndSelect('items.article', 'article')
+        .leftJoinAndSelect('items.period', 'period')
+        .leftJoinAndSelect('order.user', 'user')
+        .where('order.consumer_group_id = :groupId', { groupId })
+        .andWhere('order.user_id = :userId', { userId })
+        .andWhere('items.period_id = :periodId', { periodId })
+        .getMany();
+
+      // Filtrar comandes que tenen items vàlids d'aquest període
+      const ordersToUpdate = orders.filter(order => 
+        order.items && order.items.some(item => 
+          item.periodId === periodId && 
+          item.articleId !== null && 
+          item.articleId !== undefined
+        )
+      );
+
+      // Per cada comanda, marcar només els items del període com a pagats
+      for (const order of ordersToUpdate) {
+        const validItems = (order.items || []).filter(item => 
+          item.periodId === periodId && 
+          item.articleId !== null && 
+          item.articleId !== undefined
+        );
+
+        let periodItemsPaidAmount = 0;
+        let periodItemsTotalAmount = 0;
+
+        for (const item of validItems) {
+          const itemSubtotal = Number(item.totalPrice || 0);
+          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+          const itemTax = itemSubtotal * (taxRate / 100);
+          const itemTotalWithTax = itemSubtotal + itemTax;
+          
+          // Marcar item com a pagat
+          item.paidAmount = Number(itemTotalWithTax.toFixed(2));
+          periodItemsPaidAmount += itemTotalWithTax;
+          periodItemsTotalAmount += itemSubtotal;
+        }
+
+        // Actualitzar paidAmount de la comanda (sumar el que ja estava pagat + el nou)
+        const existingPaidAmount = Number(order.paidAmount || 0);
+        // Calcular quant ja estava pagat dels items d'aquest període
+        const existingPeriodPaid = validItems.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
+        // Nou paidAmount = existingPaidAmount - existingPeriodPaid + periodItemsPaidAmount
+        order.paidAmount = Number((existingPaidAmount - existingPeriodPaid + periodItemsPaidAmount).toFixed(2));
+
+        // Recalcular estat de pagament de la comanda
+        const totalAmount = Number(order.totalAmount || 0);
+        if (order.paidAmount >= totalAmount) {
+          order.paymentStatus = PaymentStatus.PAID;
+        } else if (order.paidAmount > 0) {
+          order.paymentStatus = PaymentStatus.PARTIAL;
+        } else {
+          order.paymentStatus = PaymentStatus.UNPAID;
+        }
+
+        await queryRunner.manager.save(validItems);
+        await queryRunner.manager.save(order);
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Retornar el resum actualitzat
+      return this.getPeriodPaymentSummary(periodId, groupId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Marca totes les comandes d'un període i usuari com a no pagades.
+   * Només marca els items que pertanyen al període especificat.
+   */
+  async markPeriodOrdersAsUnpaid(periodId: string, userId: string, groupId: string): Promise<PeriodPaymentSummaryDto> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Obtenir totes les comandes del usuari al grup que tenen items d'aquest període
+      const orders = await this.ordersRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.items', 'items')
+        .leftJoinAndSelect('items.article', 'article')
+        .leftJoinAndSelect('items.period', 'period')
+        .leftJoinAndSelect('order.user', 'user')
+        .where('order.consumer_group_id = :groupId', { groupId })
+        .andWhere('order.user_id = :userId', { userId })
+        .andWhere('items.period_id = :periodId', { periodId })
+        .getMany();
+
+      // Filtrar comandes que tenen items vàlids d'aquest període
+      const ordersToUpdate = orders.filter(order => 
+        order.items && order.items.some(item => 
+          item.periodId === periodId && 
+          item.articleId !== null && 
+          item.articleId !== undefined
+        )
+      );
+
+      // Per cada comanda, marcar només els items del període com a no pagats
+      for (const order of ordersToUpdate) {
+        const validItems = (order.items || []).filter(item => 
+          item.periodId === periodId && 
+          item.articleId !== null && 
+          item.articleId !== undefined
+        );
+
+        // Calcular quant estava pagat dels items d'aquest període
+        const existingPeriodPaid = validItems.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
+
+        // Marcar tots els items del període com a no pagats
+        for (const item of validItems) {
+          item.paidAmount = 0;
+        }
+
+        // Actualitzar paidAmount de la comanda (restar el que estava pagat d'aquest període)
+        const existingPaidAmount = Number(order.paidAmount || 0);
+        order.paidAmount = Number(Math.max(0, existingPaidAmount - existingPeriodPaid).toFixed(2));
+
+        // Recalcular estat de pagament de la comanda
+        const totalAmount = Number(order.totalAmount || 0);
+        if (order.paidAmount >= totalAmount) {
+          order.paymentStatus = PaymentStatus.PAID;
+        } else if (order.paidAmount > 0) {
+          order.paymentStatus = PaymentStatus.PARTIAL;
+        } else {
+          order.paymentStatus = PaymentStatus.UNPAID;
+        }
+
+        await queryRunner.manager.save(validItems);
+        await queryRunner.manager.save(order);
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Retornar el resum actualitzat
+      return this.getPeriodPaymentSummary(periodId, groupId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
