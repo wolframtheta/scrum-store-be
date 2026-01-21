@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, IsNull } from 'typeorm';
+import { Repository, Like, IsNull, In } from 'typeorm';
+import { createHash } from 'crypto';
 import { Article } from './entities/article.entity';
 import { ArticlePriceHistory } from './entities/article-price-history.entity';
 import { CreateArticleDto } from './dto/create-article.dto';
@@ -10,6 +11,7 @@ import { PriceHistoryResponseDto } from './dto/price-history-response.dto';
 import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
 import { PeriodsService } from '../periods/periods.service';
 import { StorageService } from '../storage/storage.service';
+import { Producer } from '../producers/entities/producer.entity';
 
 @Injectable()
 export class ArticlesService {
@@ -20,6 +22,8 @@ export class ArticlesService {
     private readonly articlesRepository: Repository<Article>,
     @InjectRepository(ArticlePriceHistory)
     private readonly priceHistoryRepository: Repository<ArticlePriceHistory>,
+    @InjectRepository(Producer)
+    private readonly producerRepository: Repository<Producer>,
     private readonly consumerGroupsService: ConsumerGroupsService,
     @Inject(forwardRef(() => PeriodsService))
     private readonly periodsService: PeriodsService,
@@ -39,47 +43,70 @@ export class ArticlesService {
   }
 
   /**
-   * Busca un article existent basat en els criteris d'identificació únics
-   * (category, product, variety, producerId, consumerGroupId, unitMeasure)
-   * Usa comparación case-insensitive para evitar duplicados por diferencias de mayúsculas
+   * Genera un hash único para un artículo basado en:
+   * proveedor + categoría + producto + variedad
+   * Todos los valores se normalizan (trim y uppercase) para evitar duplicados
+   */
+  private async generateArticleHash(createDto: CreateArticleDto): Promise<string> {
+    // Obtener el nombre del productor si existe
+    let producerName = '';
+    if (createDto.producerId) {
+      try {
+        const producer = await this.producerRepository.findOne({
+          where: { id: createDto.producerId },
+        });
+        producerName = producer?.name || '';
+      } catch (error) {
+        this.logger.warn(`Error obteniendo productor ${createDto.producerId}:`, error);
+      }
+    }
+
+    // Normalizar todos los valores a mayúsculas
+    const normalizedProducer = (producerName || '').trim().toUpperCase();
+    const normalizedCategory = (createDto.category || '').trim().toUpperCase();
+    const normalizedProduct = (createDto.product || '').trim().toUpperCase();
+    const normalizedVariety = (createDto.variety || '').trim().toUpperCase();
+
+    // Concatenar: producer + category + product + variety
+    const concatenated = `${normalizedProducer}|${normalizedCategory}|${normalizedProduct}|${normalizedVariety}`;
+
+    // Generar hash SHA-256
+    const hash = createHash('sha256').update(concatenated).digest('hex');
+    return hash;
+  }
+
+  /**
+   * Busca un article existent basat en el hash únic
+   * El hash se genera a partir de: proveedor + categoría + producto + variedad
    */
   async findExistingArticle(createDto: CreateArticleDto): Promise<Article | null> {
-    const normalizedCategory = this.normalizeString(createDto.category);
-    const normalizedProduct = this.normalizeString(createDto.product);
-    const normalizedVariety = this.normalizeString(createDto.variety);
+    const hash = await this.generateArticleHash(createDto);
+    
+    const article = await this.articlesRepository.findOne({
+      where: { 
+        hash,
+        consumerGroupId: createDto.consumerGroupId,
+      },
+      relations: ['producer', 'producer.supplier'],
+    });
 
-    const queryBuilder = this.articlesRepository.createQueryBuilder('article')
-      .leftJoinAndSelect('article.producer', 'producer')
-      .leftJoinAndSelect('producer.supplier', 'supplier')
-      .where('LOWER(TRIM(article.category)) = LOWER(:category)', { category: normalizedCategory })
-      .andWhere('LOWER(TRIM(article.product)) = LOWER(:product)', { product: normalizedProduct })
-      .andWhere('article.consumer_group_id = :consumerGroupId', { consumerGroupId: createDto.consumerGroupId })
-      .andWhere('article.unit_measure = :unitMeasure', { unitMeasure: createDto.unitMeasure });
-
-    // Handle nullable fields
-    if (normalizedVariety) {
-      queryBuilder.andWhere('LOWER(TRIM(article.variety)) = LOWER(:variety)', { variety: normalizedVariety });
-    } else {
-      queryBuilder.andWhere('article.variety IS NULL');
-    }
-
-    if (createDto.producerId) {
-      queryBuilder.andWhere('article.producer_id = :producerId', { producerId: createDto.producerId });
-    } else {
-      queryBuilder.andWhere('article.producer_id IS NULL');
-    }
-
-    return await queryBuilder.getOne();
+    return article;
   }
 
   /**
    * Busca un article existent o el crea si no existeix
+   * Retorna información sobre si el artículo fue creado o actualizado
    */
-  async findOrCreateArticle(createDto: CreateArticleDto): Promise<ArticleResponseDto> {
+  async findOrCreateArticle(createDto: CreateArticleDto): Promise<{ article: ArticleResponseDto; isNew: boolean }> {
     // Buscar article existent
     const existingArticle = await this.findExistingArticle(createDto);
 
     if (existingArticle) {
+      // Actualizar el hash si no existe (para artículos antiguos)
+      if (!existingArticle.hash) {
+        existingArticle.hash = await this.generateArticleHash(createDto);
+      }
+
       // Actualitzar el preu base si és diferent (opcional, per mantenir el preu més recent)
       if (createDto.pricePerUnit !== existingArticle.pricePerUnit) {
         existingArticle.pricePerUnit = createDto.pricePerUnit;
@@ -90,11 +117,12 @@ export class ArticlesService {
       const dto = new ArticleResponseDto(existingArticle);
       (dto as any).producerName = existingArticle.producer?.name;
       (dto as any).supplierName = existingArticle.producer?.supplier?.name;
-      return dto;
+      return { article: dto, isNew: false };
     }
 
     // Si no existeix, crear-lo
-    return await this.create(createDto);
+    const newArticle = await this.create(createDto);
+    return { article: newArticle, isNew: true };
   }
 
   async create(createDto: CreateArticleDto): Promise<ArticleResponseDto> {
@@ -106,7 +134,13 @@ export class ArticlesService {
       variety: createDto.variety ? (this.normalizeString(createDto.variety) || createDto.variety) : undefined,
     };
     
-    const article = this.articlesRepository.create(normalizedDto);
+    // Generar hash para el artículo
+    const hash = await this.generateArticleHash(createDto);
+    
+    const article = this.articlesRepository.create({
+      ...normalizedDto,
+      hash,
+    });
     const savedArticle = await this.articlesRepository.save(article);
 
     // Save initial price in history
@@ -127,19 +161,78 @@ export class ArticlesService {
     return dto;
   }
 
-  async createBatch(createDtos: CreateArticleDto[]): Promise<{ created: number; failed: number; articles: ArticleResponseDto[] }> {
+  /**
+   * Verifica qué artículos de la lista ya existen basándose en su hash
+   * Retorna un array con índice y estado de existencia
+   */
+  async checkArticlesExist(createDtos: CreateArticleDto[]): Promise<Array<{ index: number; exists: boolean }>> {
+    const results: Array<{ index: number; exists: boolean }> = [];
+    
+    if (createDtos.length === 0) {
+      return results;
+    }
+    
+    // Generar hashes para todos los DTOs con sus índices
+    const hashPromises = createDtos.map(async (dto, index) => {
+      const hash = await this.generateArticleHash(dto);
+      return { index, hash, consumerGroupId: dto.consumerGroupId };
+    });
+    
+    const hashData = await Promise.all(hashPromises);
+    
+    // Agrupar por consumerGroupId para hacer queries más eficientes
+    const byGroup = new Map<string, Array<{ index: number; hash: string }>>();
+    hashData.forEach(({ index, hash, consumerGroupId }) => {
+      if (!byGroup.has(consumerGroupId)) {
+        byGroup.set(consumerGroupId, []);
+      }
+      byGroup.get(consumerGroupId)!.push({ index, hash });
+    });
+    
+    // Buscar artículos existentes por grupo
+    const existingHashesSet = new Set<string>();
+    
+    for (const [consumerGroupId, hashList] of byGroup) {
+      const hashes = hashList.map(h => h.hash);
+      const existingArticles = await this.articlesRepository.find({
+        where: {
+          hash: In(hashes),
+          consumerGroupId,
+        },
+        select: ['hash'],
+      });
+      
+      existingArticles.forEach(article => {
+        existingHashesSet.add(`${article.hash}|${consumerGroupId}`);
+      });
+    }
+    
+    // Mapear cada artículo a si existe o no
+    hashData.forEach(({ index, hash, consumerGroupId }) => {
+      const key = `${hash}|${consumerGroupId}`;
+      results.push({
+        index,
+        exists: existingHashesSet.has(key),
+      });
+    });
+    
+    return results;
+  }
+
+  async createBatch(createDtos: CreateArticleDto[]): Promise<{ created: number; updated: number; failed: number; articles: ArticleResponseDto[] }> {
     const results: ArticleResponseDto[] = [];
     let created = 0;
+    let updated = 0;
     let failed = 0;
 
     for (const createDto of createDtos) {
       try {
-        const article = await this.findOrCreateArticle(createDto);
+        const { article, isNew } = await this.findOrCreateArticle(createDto);
         results.push(article);
-        // Si l'article ja existia, no incrementem created
-        const existing = await this.findExistingArticle(createDto);
-        if (!existing) {
+        if (isNew) {
           created++;
+        } else {
+          updated++;
         }
       } catch (error) {
         console.error('Error creating article:', error);
@@ -149,6 +242,7 @@ export class ArticlesService {
 
     return {
       created,
+      updated,
       failed,
       articles: results,
     };
@@ -281,6 +375,13 @@ export class ArticlesService {
     const oldPrice = article.pricePerUnit;
     const priceChanged = updateDto.pricePerUnit !== undefined && updateDto.pricePerUnit !== oldPrice;
 
+    // Verificar si algún campo que afecta al hash ha cambiado
+    const hashFieldsChanged = 
+      updateDto.producerId !== undefined && updateDto.producerId !== article.producerId ||
+      updateDto.category !== undefined && updateDto.category !== article.category ||
+      updateDto.product !== undefined && updateDto.product !== article.product ||
+      updateDto.variety !== undefined && updateDto.variety !== article.variety;
+
     // Si s'ha canviat el preu i hi ha un consumerGroupId, actualitzar el preu del període actual
     if (priceChanged && consumerGroupId && updateDto.pricePerUnit !== undefined) {
       try {
@@ -331,6 +432,21 @@ export class ArticlesService {
 
     // Actualitzar l'article (incloent el preu base per mantenir-lo sincronitzat)
     Object.assign(article, normalizedUpdateDto);
+
+    // Recalcular hash si algún campo que lo afecta ha cambiado
+    if (hashFieldsChanged) {
+      const createDtoForHash: CreateArticleDto = {
+        category: article.category,
+        product: article.product,
+        variety: article.variety,
+        producerId: article.producerId,
+        consumerGroupId: article.consumerGroupId,
+        unitMeasure: article.unitMeasure,
+        pricePerUnit: article.pricePerUnit,
+      };
+      article.hash = await this.generateArticleHash(createDtoForHash);
+    }
+
     const updatedArticle = await this.articlesRepository.save(article);
 
     // Save price history if price changed

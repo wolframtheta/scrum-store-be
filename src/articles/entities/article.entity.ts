@@ -68,6 +68,9 @@ export class Article {
   @Column({ type: 'boolean', default: false, name: 'is_seasonal' })
   isSeasonal: boolean;
 
+  @Column({ type: 'varchar', length: 64, nullable: true, unique: false })
+  hash?: string;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 

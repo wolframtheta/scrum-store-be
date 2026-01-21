@@ -59,17 +59,50 @@ export class ArticlesController {
   @UseGuards(IsManagerGuard)
   @ApiOperation({
     summary: 'Crear múltiples artículos en batch',
-    description: 'Solo gestores pueden crear artículos. Crea múltiples artículos en una sola petición.',
+    description: 'Solo gestores pueden crear artículos. Crea múltiples artículos en una sola petición. Si un artículo ya existe (basado en hash de producer + category + product + variety), se actualiza en lugar de crear uno nuevo.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Artículos creados exitosamente',
+    description: 'Artículos creados/actualizados exitosamente',
+    schema: {
+      type: 'object',
+      properties: {
+        created: { type: 'number', example: 5, description: 'Número de artículos nuevos creados' },
+        updated: { type: 'number', example: 3, description: 'Número de artículos existentes actualizados' },
+        failed: { type: 'number', example: 0, description: 'Número de artículos que fallaron' },
+        articles: { type: 'array', items: { $ref: '#/components/schemas/ArticleResponseDto' } },
+      },
+    },
   })
   @ApiResponse({ status: 400, description: 'Datos inválidos' })
   @ApiResponse({ status: 401, description: 'No autorizado' })
   @ApiResponse({ status: 403, description: 'No eres gestor del grupo' })
-  async createBatch(@Body() createDtos: CreateArticleDto[]): Promise<{ created: number; failed: number; articles: ArticleResponseDto[] }> {
+  async createBatch(@Body() createDtos: CreateArticleDto[]): Promise<{ created: number; updated: number; failed: number; articles: ArticleResponseDto[] }> {
     return this.articlesService.createBatch(createDtos);
+  }
+
+  @Post('batch/check')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Verificar qué artículos ya existen',
+    description: 'Verifica qué artículos de la lista ya existen basándose en su hash. Retorna un array con el índice y si existe.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array con estado de existencia por índice',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'number' },
+          exists: { type: 'boolean' },
+        },
+      },
+    },
+  })
+  async checkArticlesExist(@Body() createDtos: CreateArticleDto[]): Promise<Array<{ index: number; exists: boolean }>> {
+    return this.articlesService.checkArticlesExist(createDtos);
   }
 
   @Get()
