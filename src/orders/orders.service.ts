@@ -375,6 +375,21 @@ export class OrdersService {
       // Delete the item using remove method within the transaction
       await queryRunner.manager.remove(itemToDelete);
 
+      // Si no queden items, eliminar la comanda completament
+      if (order.items.length === 0) {
+        await queryRunner.manager.remove(order);
+        await queryRunner.commitTransaction();
+        
+        // Return an empty order to signal deletion
+        return new OrderResponseDto({
+          ...order,
+          items: [],
+          totalAmount: 0,
+          paidAmount: 0,
+          userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+        });
+      }
+
       // Recalculate total amount and paid amount
       const remainingItems = order.items;
       const newTotalAmount = remainingItems.reduce((sum, item) => {
