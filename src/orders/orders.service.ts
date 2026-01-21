@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Order, PaymentStatus } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -169,11 +169,16 @@ export class OrdersService {
 
     const orders = await queryBuilder.getMany();
 
-    return orders.map(order => new OrderResponseDto({
-      ...order,
-      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => this.mapOrderItemToDto(item)),
-    }));
+    return orders.map(order => {
+      // Filter out items with null articleId (deleted items)
+      const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+      
+      return new OrderResponseDto({
+        ...order,
+        userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+        items: validItems.map(item => this.mapOrderItemToDto(item)),
+      });
+    });
   }
 
   async findOne(id: string, userId: string): Promise<OrderResponseDto> {
@@ -199,10 +204,13 @@ export class OrdersService {
       throw new ForbiddenException('You do not have access to this order');
     }
 
+    // Filter out items with null articleId (deleted items)
+    const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+    
     return new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => this.mapOrderItemToDto(item)),
+      items: validItems.map(item => this.mapOrderItemToDto(item)),
     });
   }
 
@@ -223,11 +231,16 @@ export class OrdersService {
 
     const orders = await queryBuilder.getMany();
 
-    return orders.map(order => new OrderResponseDto({
-      ...order,
-      userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => this.mapOrderItemToDto(item)),
-    }));
+    return orders.map(order => {
+      // Filter out items with null articleId (deleted items)
+      const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+      
+      return new OrderResponseDto({
+        ...order,
+        userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
+        items: validItems.map(item => this.mapOrderItemToDto(item)),
+      });
+    });
   }
 
   async updateDelivery(id: string, isDelivered: boolean): Promise<OrderResponseDto> {
@@ -243,10 +256,13 @@ export class OrdersService {
     order.isDelivered = isDelivered;
     await this.ordersRepository.save(order);
 
+    // Filter out items with null articleId (deleted items)
+    const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+
     return new OrderResponseDto({
       ...order,
       userName: order.user ? `${order.user.name} ${order.user.surname}` : undefined,
-      items: order.items.map(item => this.mapOrderItemToDto(item)),
+      items: validItems.map(item => this.mapOrderItemToDto(item)),
     });
   }
 
@@ -261,5 +277,118 @@ export class OrdersService {
 
     // Los order_items se borrarán automáticamente por CASCADE
     await this.ordersRepository.remove(order);
+  }
+
+  async deleteOrderItemById(orderId: string, itemId: string): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.article', 'items.period', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Find the specific order item by ID
+    const itemToDelete = order.items.find(item => item.id === itemId);
+    if (!itemToDelete) {
+      throw new NotFoundException(`Order item with ID ${itemId} not found in order ${orderId}`);
+    }
+
+    // Use transaction to ensure data consistency
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Calculate paid amount to subtract from order
+      const paidAmountToSubtract = Number(itemToDelete.paidAmount || 0);
+      
+      // Remove the item from the order's items array
+      order.items = order.items.filter(item => item.id !== itemId);
+      
+      // Delete the item using remove method within the transaction
+      await queryRunner.manager.remove(itemToDelete);
+
+      // Recalculate total amount and paid amount
+      const remainingItems = order.items;
+      const newTotalAmount = remainingItems.reduce((sum, item) => {
+        return sum + Number(item.totalPrice);
+      }, 0);
+      
+      // Recalculate paid amount: subtract the paid amount of deleted item
+      const currentPaidAmount = Number(order.paidAmount || 0);
+      const newPaidAmount = Math.max(0, currentPaidAmount - paidAmountToSubtract);
+
+      // Update order amounts
+      order.totalAmount = Number(newTotalAmount.toFixed(2));
+      order.paidAmount = Number(newPaidAmount.toFixed(2));
+      
+      // Recalculate payment status
+      if (newTotalAmount === 0) {
+        order.paymentStatus = PaymentStatus.UNPAID;
+      } else if (newPaidAmount === 0) {
+        order.paymentStatus = PaymentStatus.UNPAID;
+      } else if (newPaidAmount >= newTotalAmount) {
+        order.paymentStatus = PaymentStatus.PAID;
+      } else {
+        order.paymentStatus = PaymentStatus.PARTIAL;
+      }
+      
+      // Save the order with updated items and amounts
+      const savedOrder = await queryRunner.manager.save(order);
+
+      await queryRunner.commitTransaction();
+
+      // Reload order with all relations to ensure we have fresh data
+      const updatedOrder = await this.ordersRepository.findOne({
+        where: { id: orderId },
+        relations: ['items', 'items.article', 'items.period', 'user'],
+      });
+
+      if (!updatedOrder) {
+        throw new NotFoundException('Order not found after deletion');
+      }
+
+      // Filter out items with null articleId (deleted items)
+      const validItems = (updatedOrder.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+
+      return new OrderResponseDto({
+        ...updatedOrder,
+        userName: updatedOrder.user ? `${updatedOrder.user.name} ${updatedOrder.user.surname}` : undefined,
+        items: validItems.map(item => this.mapOrderItemToDto(item)),
+      });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // Keep the old method for backward compatibility, but it now uses the new method
+  async deleteOrderItem(orderId: string, articleId: string): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.article', 'items.period', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Find all order items with this articleId to delete
+    // Handle case where articleId might be null (if article was deleted from catalog)
+    const itemsToDelete = order.items.filter(item => 
+      item.articleId === articleId || (item.articleId === null && articleId === null)
+    );
+    
+    if (itemsToDelete.length === 0) {
+      throw new NotFoundException(`Order items with article ID ${articleId} not found in order ${orderId}`);
+    }
+
+    // Delete the first matching item (or all if needed)
+    // For now, delete the first one to maintain backward compatibility
+    return this.deleteOrderItemById(orderId, itemsToDelete[0].id);
   }
 }

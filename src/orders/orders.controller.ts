@@ -41,6 +41,23 @@ export class OrdersController {
     return this.ordersService.findByGroup(groupId, paymentStatus);
   }
 
+  @Delete(':orderId/items/:itemId')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Eliminar un item d\'una comanda',
+    description: 'Elimina un item específic d\'una comanda per ID i recalcula el total. Només gestors i preparadors poden eliminar items.',
+  })
+  @ApiResponse({ status: 200, description: 'Item eliminat exitosament', type: OrderResponseDto })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Comanda o item no encontrado' })
+  deleteOrderItem(
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string
+  ): Promise<OrderResponseDto> {
+    return this.ordersService.deleteOrderItemById(orderId, itemId);
+  }
+
   @Delete(':id')
   @UseGuards(IsManagerOrPreparerGuard)
   @ApiOperation({
