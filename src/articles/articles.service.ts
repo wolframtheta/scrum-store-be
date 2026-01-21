@@ -27,34 +27,49 @@ export class ArticlesService {
   ) {}
 
   /**
+   * Normaliza un string capitalizando la primera letra de cada palabra
+   */
+  private normalizeString(str: string | null | undefined): string | null {
+    if (!str) return null;
+    return str
+      .trim()
+      .split(/\s+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  /**
    * Busca un article existent basat en els criteris d'identificació únics
    * (category, product, variety, producerId, consumerGroupId, unitMeasure)
+   * Usa comparación case-insensitive para evitar duplicados por diferencias de mayúsculas
    */
   async findExistingArticle(createDto: CreateArticleDto): Promise<Article | null> {
-    const where: any = {
-      category: createDto.category,
-      product: createDto.product,
-      consumerGroupId: createDto.consumerGroupId,
-      unitMeasure: createDto.unitMeasure,
-    };
+    const normalizedCategory = this.normalizeString(createDto.category);
+    const normalizedProduct = this.normalizeString(createDto.product);
+    const normalizedVariety = this.normalizeString(createDto.variety);
+
+    const queryBuilder = this.articlesRepository.createQueryBuilder('article')
+      .leftJoinAndSelect('article.producer', 'producer')
+      .leftJoinAndSelect('producer.supplier', 'supplier')
+      .where('LOWER(TRIM(article.category)) = LOWER(:category)', { category: normalizedCategory })
+      .andWhere('LOWER(TRIM(article.product)) = LOWER(:product)', { product: normalizedProduct })
+      .andWhere('article.consumer_group_id = :consumerGroupId', { consumerGroupId: createDto.consumerGroupId })
+      .andWhere('article.unit_measure = :unitMeasure', { unitMeasure: createDto.unitMeasure });
 
     // Handle nullable fields
-    if (createDto.variety) {
-      where.variety = createDto.variety;
+    if (normalizedVariety) {
+      queryBuilder.andWhere('LOWER(TRIM(article.variety)) = LOWER(:variety)', { variety: normalizedVariety });
     } else {
-      where.variety = IsNull();
+      queryBuilder.andWhere('article.variety IS NULL');
     }
 
     if (createDto.producerId) {
-      where.producerId = createDto.producerId;
+      queryBuilder.andWhere('article.producer_id = :producerId', { producerId: createDto.producerId });
     } else {
-      where.producerId = IsNull();
+      queryBuilder.andWhere('article.producer_id IS NULL');
     }
 
-    return await this.articlesRepository.findOne({
-      where,
-      relations: ['producer', 'producer.supplier'],
-    });
+    return await queryBuilder.getOne();
   }
 
   /**
@@ -83,7 +98,15 @@ export class ArticlesService {
   }
 
   async create(createDto: CreateArticleDto): Promise<ArticleResponseDto> {
-    const article = this.articlesRepository.create(createDto);
+    // Normalizar campos antes de crear
+    const normalizedDto = {
+      ...createDto,
+      category: this.normalizeString(createDto.category) || createDto.category,
+      product: this.normalizeString(createDto.product) || createDto.product,
+      variety: createDto.variety ? (this.normalizeString(createDto.variety) || createDto.variety) : undefined,
+    };
+    
+    const article = this.articlesRepository.create(normalizedDto);
     const savedArticle = await this.articlesRepository.save(article);
 
     // Save initial price in history
@@ -294,8 +317,20 @@ export class ArticlesService {
       }
     }
 
+    // Normalizar campos si se están actualizando
+    const normalizedUpdateDto = { ...updateDto };
+    if (updateDto.category) {
+      normalizedUpdateDto.category = this.normalizeString(updateDto.category) || updateDto.category;
+    }
+    if (updateDto.product) {
+      normalizedUpdateDto.product = this.normalizeString(updateDto.product) || updateDto.product;
+    }
+    if (updateDto.variety !== undefined) {
+      normalizedUpdateDto.variety = updateDto.variety ? (this.normalizeString(updateDto.variety) || updateDto.variety) : undefined;
+    }
+
     // Actualitzar l'article (incloent el preu base per mantenir-lo sincronitzat)
-    Object.assign(article, updateDto);
+    Object.assign(article, normalizedUpdateDto);
     const updatedArticle = await this.articlesRepository.save(article);
 
     // Save price history if price changed
@@ -473,6 +508,134 @@ export class ArticlesService {
     }
 
     return { updated, failed };
+  }
+
+  /**
+   * Normaliza todos los artículos existentes en la base de datos
+   * Capitaliza la primera letra de cada palabra en category, product y variety
+   */
+  async normalizeAllArticles(): Promise<{ normalized: number; duplicatesFound: number; errors: Array<{ articleId: string; error: string }> }> {
+    const errors: Array<{ articleId: string; error: string }> = [];
+    let normalized = 0;
+    let duplicatesFound = 0;
+
+    try {
+      // Obtener todos los artículos
+      const articles = await this.articlesRepository.find({
+        relations: ['producer', 'producer.supplier'],
+      });
+
+      this.logger.log(`Iniciando normalización de ${articles.length} artículos`);
+
+      // Agrupar artículos por grupo de consumo para procesar por lotes
+      const articlesByGroup = new Map<string, Article[]>();
+      for (const article of articles) {
+        const groupId = article.consumerGroupId;
+        if (!articlesByGroup.has(groupId)) {
+          articlesByGroup.set(groupId, []);
+        }
+        articlesByGroup.get(groupId)!.push(article);
+      }
+
+      // Procesar cada grupo
+      for (const [groupId, groupArticles] of articlesByGroup) {
+        this.logger.log(`Procesando ${groupArticles.length} artículos del grupo ${groupId}`);
+
+        // Crear un mapa para detectar duplicados normalizados
+        const normalizedMap = new Map<string, Article[]>();
+
+        for (const article of groupArticles) {
+          try {
+            const normalizedCategory = this.normalizeString(article.category) || article.category;
+            const normalizedProduct = this.normalizeString(article.product) || article.product;
+            const normalizedVariety = this.normalizeString(article.variety) || article.variety || '';
+
+            // Crear clave única para identificar duplicados
+            const normalizedKey = `${normalizedCategory}|${normalizedProduct}|${normalizedVariety}|${article.producerId || 'null'}|${article.unitMeasure}`.toLowerCase();
+
+            if (!normalizedMap.has(normalizedKey)) {
+              normalizedMap.set(normalizedKey, []);
+            }
+            normalizedMap.get(normalizedKey)!.push(article);
+          } catch (error) {
+            errors.push({
+              articleId: article.id,
+              error: error instanceof Error ? error.message : 'Error desconocido',
+            });
+          }
+        }
+
+        // Procesar duplicados y normalizar
+        for (const [key, duplicates] of normalizedMap) {
+          if (duplicates.length > 1) {
+            duplicatesFound += duplicates.length - 1;
+            this.logger.warn(`Encontrados ${duplicates.length} artículos duplicados para: ${key}`);
+
+            // Mantener el primero y marcar los demás para eliminación o actualización
+            const [keepArticle, ...duplicateArticles] = duplicates.sort((a, b) => 
+              a.createdAt.getTime() - b.createdAt.getTime()
+            );
+
+            // Normalizar el artículo que se mantiene
+            const needsUpdate = 
+              keepArticle.category !== this.normalizeString(keepArticle.category) ||
+              keepArticle.product !== this.normalizeString(keepArticle.product) ||
+              (keepArticle.variety && keepArticle.variety !== this.normalizeString(keepArticle.variety));
+
+            if (needsUpdate) {
+              keepArticle.category = this.normalizeString(keepArticle.category) || keepArticle.category;
+              keepArticle.product = this.normalizeString(keepArticle.product) || keepArticle.product;
+              if (keepArticle.variety) {
+                keepArticle.variety = this.normalizeString(keepArticle.variety) || keepArticle.variety;
+              }
+              await this.articlesRepository.save(keepArticle);
+              normalized++;
+            }
+
+            // Eliminar duplicados (o podrías fusionarlos si tienen datos diferentes)
+            for (const duplicate of duplicateArticles) {
+              try {
+                await this.articlesRepository.remove(duplicate);
+                this.logger.log(`Eliminado artículo duplicado: ${duplicate.id}`);
+              } catch (error) {
+                errors.push({
+                  articleId: duplicate.id,
+                  error: `Error eliminando duplicado: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+                });
+              }
+            }
+          } else {
+            // Solo un artículo, solo normalizar si es necesario
+            const article = duplicates[0];
+            const normalizedCategory = this.normalizeString(article.category) || article.category;
+            const normalizedProduct = this.normalizeString(article.product) || article.product;
+            const normalizedVariety = article.variety ? (this.normalizeString(article.variety) || article.variety) : undefined;
+
+            const needsUpdate = 
+              article.category !== normalizedCategory ||
+              article.product !== normalizedProduct ||
+              (article.variety && article.variety !== normalizedVariety);
+
+            if (needsUpdate) {
+              article.category = normalizedCategory;
+              article.product = normalizedProduct;
+              if (normalizedVariety !== undefined) {
+                article.variety = normalizedVariety;
+              }
+              await this.articlesRepository.save(article);
+              normalized++;
+            }
+          }
+        }
+      }
+
+      this.logger.log(`Normalización completada: ${normalized} artículos normalizados, ${duplicatesFound} duplicados encontrados`);
+    } catch (error) {
+      this.logger.error('Error durante la normalización:', error);
+      throw error;
+    }
+
+    return { normalized, duplicatesFound, errors };
   }
 }
 

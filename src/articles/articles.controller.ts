@@ -435,6 +435,39 @@ export class ArticlesController {
 
     return this.articlesService.batchToggleEco(batchDto.articleIds, batchDto.isEco);
   }
+
+  @Post('normalize')
+  @UseGuards(IsManagerGuard)
+  @ApiOperation({
+    summary: 'Normalizar todos los artículos',
+    description: 'Normaliza todos los artículos capitalizando la primera letra de cada palabra en category, product y variety. También detecta y elimina duplicados causados por diferencias de mayúsculas/minúsculas. Solo gestores pueden ejecutar esta operación.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Normalización completada',
+    schema: {
+      type: 'object',
+      properties: {
+        normalized: { type: 'number', example: 150 },
+        duplicatesFound: { type: 'number', example: 12 },
+        errors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              articleId: { type: 'string' },
+              error: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor' })
+  async normalizeAllArticles(): Promise<{ normalized: number; duplicatesFound: number; errors: Array<{ articleId: string; error: string }> }> {
+    return this.articlesService.normalizeAllArticles();
+  }
 }
 
 
