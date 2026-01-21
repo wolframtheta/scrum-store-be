@@ -258,6 +258,7 @@ export class ArticlesService {
     productSearch?: string,
     producerIds?: string[],
     supplierIds?: string[],
+    periodId?: string,
   ): Promise<ArticleResponseDto[]> {
     const queryBuilder = this.articlesRepository.createQueryBuilder('article')
       .leftJoinAndSelect('article.producer', 'producer')
@@ -304,6 +305,13 @@ export class ArticlesService {
 
     if (productSearch) {
       queryBuilder.andWhere('LOWER(article.product) LIKE LOWER(:productSearch)', { productSearch: `%${productSearch}%` });
+    }
+
+    // Filtrar per període si s'especifica
+    if (periodId) {
+      queryBuilder
+        .innerJoin('period_articles', 'pa', 'pa.article_id = article.id')
+        .andWhere('pa.period_id = :periodId', { periodId });
     }
 
     queryBuilder.orderBy('article.created_at', 'DESC');

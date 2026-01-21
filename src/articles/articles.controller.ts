@@ -119,6 +119,7 @@ export class ArticlesController {
   @ApiQuery({ name: 'productSearch', required: false, description: 'Buscar específicamente por nombre del producto' })
   @ApiQuery({ name: 'producerIds', required: false, description: 'Filtrar por IDs de productores (array separado por comas)' })
   @ApiQuery({ name: 'supplierIds', required: false, description: 'Filtrar por IDs de proveedores (array separado por comas)' })
+  @ApiQuery({ name: 'periodId', required: false, description: 'Filtrar por ID de período' })
   @ApiResponse({
     status: 200,
     description: 'Lista de artículos',
@@ -135,6 +136,7 @@ export class ArticlesController {
     @Query('productSearch') productSearch?: string,
     @Query('producerIds') producerIds?: string,
     @Query('supplierIds') supplierIds?: string,
+    @Query('periodId') periodId?: string,
   ): Promise<ArticleResponseDto[]> {
     const showcaseFilter = inShowcase === 'true' ? true : inShowcase === 'false' ? false : undefined;
     const ecoFilter = isEco === 'true' ? true : isEco === 'false' ? false : undefined;
@@ -142,7 +144,7 @@ export class ArticlesController {
     const categoriesFilter = categories && categories.trim() ? categories.split(',').map(c => c.trim()).filter(c => c.length > 0) : undefined;
     const producerIdsFilter = producerIds && producerIds.trim() ? producerIds.split(',').map(id => id.trim()).filter(id => id.length > 0) : undefined;
     const supplierIdsFilter = supplierIds && supplierIds.trim() ? supplierIds.split(',').map(id => id.trim()).filter(id => id.length > 0) : undefined;
-    return this.articlesService.findAll(groupId, showcaseFilter, ecoFilter, seasonalFilter, categoriesFilter, search, productSearch, producerIdsFilter, supplierIdsFilter);
+    return this.articlesService.findAll(groupId, showcaseFilter, ecoFilter, seasonalFilter, categoriesFilter, search, productSearch, producerIdsFilter, supplierIdsFilter, periodId);
   }
 
   @Get(':id')
