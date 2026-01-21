@@ -44,3 +44,4 @@ AWS_S3_BUCKET=scrum-store-bucket
 # ==========================================
 THROTTLE_TTL=60
 THROTTLE_LIMIT=10
+PEXELS_API_KEY=UG62Vv6f4fsYt3xVoWxYU9usqzrqlA0E09c7pawX2xArpPZbPncW3soM
