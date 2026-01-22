@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsUUID, IsNumber, IsPositive, IsOptional, IsArray, ArrayMinSize, ValidateNested, IsString, IsNotEmpty, IsBoolean } from 'class-validator';
+import { IsUUID, IsNumber, IsPositive, IsOptional, IsArray, ArrayMinSize, ValidateNested, IsString, IsNotEmpty, IsBoolean, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class SelectedOptionValueDto {
@@ -27,6 +27,17 @@ class SelectedOptionValueDto {
     description: 'Valor seleccionado (boolean | number | string | string[])' 
   })
   value: boolean | number | string | string[];
+
+  @ApiPropertyOptional({ 
+    example: 2.5, 
+    description: 'Precio adicional de esta opción seleccionada',
+    default: 0
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  price?: number;
 }
 
 export class OrderItemDto {

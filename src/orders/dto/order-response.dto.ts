@@ -74,6 +74,10 @@ export class OrderItemResponseDto {
   @Expose()
   paidAmount: number;
 
+  @ApiPropertyOptional({ type: 'array', description: 'Opciones de personalización seleccionadas' })
+  @Expose()
+  selectedOptions?: any[];
+
   constructor(partial: Partial<OrderItemResponseDto>) {
     Object.assign(this, partial);
   }

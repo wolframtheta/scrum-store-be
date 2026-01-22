@@ -50,5 +50,6 @@ export interface SelectedOption {
   title: string;
   type: 'boolean' | 'numeric' | 'string' | 'select' | 'multiselect';
   value: boolean | number | string | string[];
+  price?: number; // Preu addicional d'aquesta opció seleccionada
 }
 

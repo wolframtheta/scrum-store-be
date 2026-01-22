@@ -44,6 +44,7 @@ export class OrdersService {
       pricePerUnit: item.pricePerUnit,
       totalPrice: item.totalPrice,
       paidAmount: item.paidAmount,
+      selectedOptions: item.selectedOptions,
     });
   }
 
@@ -162,7 +163,21 @@ export class OrdersService {
           throw new NotFoundException(`Article ${itemDto.articleId} not found`);
         }
 
-        const totalPrice = Number((Number(article.pricePerUnit) * itemDto.quantity).toFixed(2));
+        // Calcular el preu base
+        const basePrice = Number(article.pricePerUnit) * itemDto.quantity;
+        
+        // Calcular el preu de les personalitzacions
+        // El preu ja ve calculat a selectedOptions.price, només cal sumar-lo
+        let customizationPrice = 0;
+        if (itemDto.selectedOptions && itemDto.selectedOptions.length > 0) {
+          for (const selectedOption of itemDto.selectedOptions) {
+            if (selectedOption.price && selectedOption.price > 0) {
+              customizationPrice += selectedOption.price * itemDto.quantity;
+            }
+          }
+        }
+        
+        const totalPrice = Number((basePrice + customizationPrice).toFixed(2));
         totalAmount += totalPrice;
 
         const orderItem = this.orderItemsRepository.create({
