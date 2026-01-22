@@ -1,6 +1,33 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsUUID, IsNumber, IsPositive, IsOptional, IsArray, ArrayMinSize, ValidateNested } from 'class-validator';
+import { IsUUID, IsNumber, IsPositive, IsOptional, IsArray, ArrayMinSize, ValidateNested, IsString, IsNotEmpty, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
+
+class SelectedOptionValueDto {
+  @ApiProperty({ example: 'opt-1', description: 'ID de la opción' })
+  @IsString()
+  @IsNotEmpty()
+  optionId: string;
+
+  @ApiProperty({ example: 'Color', description: 'Título de la opción' })
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @ApiProperty({ 
+    enum: ['boolean', 'numeric', 'string', 'select', 'multiselect'], 
+    example: 'select', 
+    description: 'Tipo de opción' 
+  })
+  @IsString()
+  @IsNotEmpty()
+  type: 'boolean' | 'numeric' | 'string' | 'select' | 'multiselect';
+
+  @ApiProperty({ 
+    example: 'rojo', 
+    description: 'Valor seleccionado (boolean | number | string | string[])' 
+  })
+  value: boolean | number | string | string[];
+}
 
 export class OrderItemDto {
   @ApiProperty({ 
@@ -26,6 +53,16 @@ export class OrderItemDto {
   @IsOptional()
   @IsUUID()
   orderPeriodId?: string;
+
+  @ApiPropertyOptional({ 
+    type: [SelectedOptionValueDto], 
+    description: 'Opciones personalizadas seleccionadas' 
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SelectedOptionValueDto)
+  selectedOptions?: SelectedOptionValueDto[];
 }
 
 export class CreateOrderDto {

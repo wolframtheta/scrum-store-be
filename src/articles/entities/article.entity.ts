@@ -71,10 +71,28 @@ export class Article {
   @Column({ type: 'varchar', length: 64, nullable: true, unique: false })
   hash?: string;
 
+  @Column({ type: 'jsonb', nullable: true, name: 'customization_options' })
+  customizationOptions?: CustomizationOption[];
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
   updatedAt: Date;
+}
+
+export interface CustomizationOption {
+  id: string;
+  title: string;
+  type: 'boolean' | 'numeric' | 'string' | 'select' | 'multiselect';
+  required?: boolean;
+  price?: number; // Preu addicional quan s'activa/selecciona aquesta opció
+  values?: CustomizationOptionValue[];
+}
+
+export interface CustomizationOptionValue {
+  id: string;
+  label: string;
+  price?: number; // Preu addicional per aquest valor específic (per select/multiselect)
 }
 

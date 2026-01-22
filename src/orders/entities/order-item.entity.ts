@@ -40,5 +40,15 @@ export class OrderItem {
 
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'paid_amount', default: 0 })
   paidAmount: number;
+
+  @Column({ type: 'jsonb', nullable: true, name: 'selected_options' })
+  selectedOptions?: SelectedOption[];
+}
+
+export interface SelectedOption {
+  optionId: string;
+  title: string;
+  type: 'boolean' | 'numeric' | 'string' | 'select' | 'multiselect';
+  value: boolean | number | string | string[];
 }
 

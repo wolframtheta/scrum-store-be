@@ -1,7 +1,69 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum, IsNumber, IsOptional, IsUUID, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsNumber, IsOptional, IsUUID, IsBoolean, Min, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { UnitMeasure } from '../entities/article.entity';
+
+class CustomizationOptionValueDto {
+  @ApiProperty({ example: 'opt-1', description: 'ID del valor de la opción' })
+  @IsString()
+  @IsNotEmpty()
+  id: string;
+
+  @ApiProperty({ example: 'Rojo', description: 'Etiqueta del valor' })
+  @IsString()
+  @IsNotEmpty()
+  label: string;
+
+  @ApiPropertyOptional({ example: 2.5, description: 'Precio adicional por este valor', default: 0 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  price?: number;
+}
+
+class CustomizationOptionDto {
+  @ApiProperty({ example: 'opt-1', description: 'ID de la opción' })
+  @IsString()
+  @IsNotEmpty()
+  id: string;
+
+  @ApiProperty({ example: 'Color', description: 'Título de la opción' })
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @ApiProperty({ 
+    enum: ['boolean', 'numeric', 'string', 'select', 'multiselect'], 
+    example: 'select', 
+    description: 'Tipo de opción' 
+  })
+  @IsString()
+  @IsNotEmpty()
+  type: 'boolean' | 'numeric' | 'string' | 'select' | 'multiselect';
+
+  @ApiPropertyOptional({ example: false, description: 'Si la opción es obligatoria', default: false })
+  @IsOptional()
+  @IsBoolean()
+  required?: boolean;
+
+  @ApiPropertyOptional({ example: 1.5, description: 'Precio adicional cuando se activa/selecciona esta opción', default: 0 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Type(() => Number)
+  price?: number;
+
+  @ApiPropertyOptional({ 
+    type: [CustomizationOptionValueDto], 
+    description: 'Valores posibles para select/multiselect' 
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomizationOptionValueDto)
+  values?: CustomizationOptionValueDto[];
+}
 
 export class CreateArticleDto {
   @ApiProperty({ example: 'Verduras', description: 'Categoría del artículo' })
@@ -76,5 +138,15 @@ export class CreateArticleDto {
   @IsOptional()
   @IsBoolean()
   isSeasonal?: boolean;
+
+  @ApiPropertyOptional({ 
+    type: [CustomizationOptionDto], 
+    description: 'Opciones de personalización del artículo' 
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CustomizationOptionDto)
+  customizationOptions?: CustomizationOptionDto[];
 }
 

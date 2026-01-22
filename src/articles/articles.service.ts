@@ -462,7 +462,19 @@ export class ArticlesService {
       await this.savePriceHistory(updatedArticle.id, updatedArticle.pricePerUnit);
     }
 
-    return new ArticleResponseDto(updatedArticle);
+    // Recarregar l'article amb les relacions per assegurar que totes les dades estiguin actualitzades
+    const articleWithRelations = await this.articlesRepository.findOne({
+      where: { id: updatedArticle.id },
+      relations: ['producer', 'producer.supplier'],
+    });
+
+    const dto = new ArticleResponseDto(articleWithRelations || updatedArticle);
+    if (articleWithRelations) {
+      (dto as any).producerName = articleWithRelations.producer?.name;
+      (dto as any).supplierName = articleWithRelations.producer?.supplier?.name;
+    }
+    
+    return dto;
   }
 
   async delete(id: string): Promise<void> {

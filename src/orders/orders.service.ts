@@ -173,6 +173,7 @@ export class OrdersService {
           pricePerUnit: article.pricePerUnit,
           totalPrice,
           paidAmount: 0,
+          selectedOptions: itemDto.selectedOptions,
         });
 
         orderItems.push(orderItem);

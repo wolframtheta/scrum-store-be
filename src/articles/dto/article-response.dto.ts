@@ -80,6 +80,10 @@ export class ArticleResponseDto {
   @Expose()
   updatedAt: Date;
 
+  @ApiPropertyOptional({ type: 'array', description: 'Opciones de personalización del artículo' })
+  @Expose()
+  customizationOptions?: any[];
+
   constructor(partial: Partial<ArticleResponseDto>) {
     Object.assign(this, partial);
   }

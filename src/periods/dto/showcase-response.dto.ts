@@ -65,6 +65,10 @@ export class ShowcaseArticleItemDto {
   @ApiPropertyOptional()
   @Expose()
   taxRate?: number;
+
+  @ApiPropertyOptional({ type: 'array' })
+  @Expose()
+  customizationOptions?: any[];
 }
 
 export class ShowcasePeriodDto {

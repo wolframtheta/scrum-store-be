@@ -396,6 +396,7 @@ export class PeriodsService {
         description: pa.article!.description,
         city: pa.article!.city,
         taxRate: pa.article!.taxRate || 0,
+        customizationOptions: pa.article!.customizationOptions,
       }));
 
       showcasePeriods.push({
