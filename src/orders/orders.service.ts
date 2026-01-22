@@ -4,6 +4,7 @@ import { Repository, DataSource, In } from 'typeorm';
 import { Order, PaymentStatus } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderItemDto } from './dto/update-order-item.dto';
 import { OrderResponseDto, OrderItemResponseDto } from './dto/order-response.dto';
 import { ArticlesService } from '../articles/articles.service';
 import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
@@ -433,6 +434,141 @@ export class OrdersService {
 
     // Los order_items se borrarán automáticamente por CASCADE
     await this.ordersRepository.remove(order);
+  }
+
+  async updateOrderItem(orderId: string, itemId: string, updateDto: UpdateOrderItemDto): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.article', 'items.period', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    // Find the specific order item by ID
+    const itemToUpdate = order.items.find(item => item.id === itemId);
+    if (!itemToUpdate) {
+      throw new NotFoundException(`Order item with ID ${itemId} not found in order ${orderId}`);
+    }
+
+    if (!itemToUpdate.article) {
+      throw new NotFoundException(`Article not found for order item ${itemId}`);
+    }
+
+    // Use transaction to ensure data consistency
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Store old values for recalculation
+      const oldTotalPrice = Number(itemToUpdate.totalPrice || 0);
+      const oldPaidAmount = Number(itemToUpdate.paidAmount || 0);
+
+      // Update quantity if provided
+      if (updateDto.quantity !== undefined) {
+        itemToUpdate.quantity = updateDto.quantity;
+      }
+
+      // Update selectedOptions if provided
+      if (updateDto.selectedOptions !== undefined) {
+        itemToUpdate.selectedOptions = updateDto.selectedOptions;
+      }
+
+      // Recalculate total price for this item
+      const article = itemToUpdate.article;
+      const quantity = Number(itemToUpdate.quantity);
+      const basePrice = Number(article.pricePerUnit) * quantity;
+      
+      // Calculate customization price
+      let customizationPrice = 0;
+      if (itemToUpdate.selectedOptions && itemToUpdate.selectedOptions.length > 0) {
+        for (const selectedOption of itemToUpdate.selectedOptions) {
+          if (selectedOption.price && selectedOption.price > 0) {
+            customizationPrice += selectedOption.price * quantity;
+          }
+        }
+      }
+      
+      const newTotalPrice = Number((basePrice + customizationPrice).toFixed(2));
+      itemToUpdate.totalPrice = newTotalPrice;
+
+      // Adjust paid amount proportionally if total price changed
+      let newPaidAmount = oldPaidAmount;
+      if (oldTotalPrice > 0 && newTotalPrice !== oldTotalPrice) {
+        // Maintain the same payment percentage
+        const paymentPercentage = oldPaidAmount / oldTotalPrice;
+        newPaidAmount = Number((newTotalPrice * paymentPercentage).toFixed(2));
+        // Don't allow paid amount to exceed total price
+        if (newPaidAmount > newTotalPrice) {
+          newPaidAmount = newTotalPrice;
+        }
+        itemToUpdate.paidAmount = newPaidAmount;
+      }
+
+      // Save the updated item
+      await queryRunner.manager.save(itemToUpdate);
+
+      // Recalculate order totals
+      const remainingItems = order.items;
+      const newOrderTotalAmount = remainingItems.reduce((sum, item) => {
+        const itemTotal = item.id === itemId ? newTotalPrice : Number(item.totalPrice || 0);
+        return sum + itemTotal;
+      }, 0);
+
+      const newOrderPaidAmount = remainingItems.reduce((sum, item) => {
+        const itemPaid = item.id === itemId ? newPaidAmount : Number(item.paidAmount || 0);
+        return sum + itemPaid;
+      }, 0);
+
+      // Update order amounts
+      order.totalAmount = Number(newOrderTotalAmount.toFixed(2));
+      order.paidAmount = Number(newOrderPaidAmount.toFixed(2));
+      
+      // Recalculate payment status
+      if (newOrderTotalAmount === 0) {
+        order.paymentStatus = PaymentStatus.UNPAID;
+      } else if (newOrderPaidAmount === 0) {
+        order.paymentStatus = PaymentStatus.UNPAID;
+      } else if (newOrderPaidAmount >= newOrderTotalAmount) {
+        order.paymentStatus = PaymentStatus.PAID;
+      } else {
+        order.paymentStatus = PaymentStatus.PARTIAL;
+      }
+      
+      // Save the order
+      await queryRunner.manager.save(order);
+
+      await queryRunner.commitTransaction();
+
+      // Reload order with all relations to ensure we have fresh data
+      const updatedOrder = await this.ordersRepository.findOne({
+        where: { id: orderId },
+        relations: ['items', 'items.article', 'items.period', 'user'],
+      });
+
+      if (!updatedOrder) {
+        throw new NotFoundException('Order not found after update');
+      }
+
+      // Filter out items with null articleId (deleted items)
+      const validItems = (updatedOrder.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
+
+      const transportCost = await this.calculateTransportCostForOrder(updatedOrder);
+
+      return new OrderResponseDto({
+        ...updatedOrder,
+        userName: updatedOrder.user ? `${updatedOrder.user.name} ${updatedOrder.user.surname}` : undefined,
+        items: validItems.map(item => this.mapOrderItemToDto(item)),
+        transportCost,
+      });
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async deleteOrderItemById(orderId: string, itemId: string): Promise<OrderResponseDto> {

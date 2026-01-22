@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, Validatio
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderItemDto } from './dto/update-order-item.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { PeriodPaymentSummaryDto } from './dto/period-payment-summary.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -114,6 +115,24 @@ export class OrdersController {
       throw new BadRequestException('groupId is required');
     }
     return this.ordersService.markPeriodOrdersAsUnpaid(periodId, userId, groupId);
+  }
+
+  @Patch(':orderId/items/:itemId')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Actualitzar un item d\'una comanda',
+    description: 'Actualitza la quantitat i/o les opcions de personalització d\'un item d\'una comanda i recalcula el total. Només gestors i preparadors poden actualitzar items.',
+  })
+  @ApiResponse({ status: 200, description: 'Item actualitzat exitosament', type: OrderResponseDto })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Comanda o item no encontrado' })
+  updateOrderItem(
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body(new ValidationPipe({ whitelist: true, transform: true })) updateDto: UpdateOrderItemDto
+  ): Promise<OrderResponseDto> {
+    return this.ordersService.updateOrderItem(orderId, itemId, updateDto);
   }
 
   @Delete(':orderId/items/:itemId')
