@@ -43,6 +43,9 @@ export class Period {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, name: 'transport_cost' })
   transportCost?: number;
 
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, name: 'transport_tax_rate' })
+  transportTaxRate?: number;
+
   @OneToMany(() => PeriodArticle, periodArticle => periodArticle.period, { cascade: true })
   periodArticles: PeriodArticle[];
 

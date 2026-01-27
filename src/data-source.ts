@@ -42,6 +42,7 @@ import { AddPeriodIdToOrderItems1737200000000 } from '../migrations/173720000000
 import { RenameTaxIdToCif1737300000000 } from '../migrations/1737300000000-RenameTaxIdToCif';
 import { AddHashToArticles1737400000000 } from '../migrations/1737400000000-AddHashToArticles';
 import { AddTransportCostToPeriods1737500000000 } from '../migrations/1737500000000-AddTransportCostToPeriods';
+import { AddTransportTaxRateToPeriods1737600000000 } from '../migrations/1737600000000-AddTransportTaxRateToPeriods';
 import { AddCustomizationOptions1769080326265 } from '../migrations/1769080326265-AddCustomizationOptions';
 
 export const AppDataSource = new DataSource({
@@ -88,6 +89,7 @@ export const AppDataSource = new DataSource({
     RenameTaxIdToCif1737300000000,
     AddHashToArticles1737400000000,
     AddTransportCostToPeriods1737500000000,
+    AddTransportTaxRateToPeriods1737600000000,
     AddCustomizationOptions1769080326265,
   ],
   synchronize: false,

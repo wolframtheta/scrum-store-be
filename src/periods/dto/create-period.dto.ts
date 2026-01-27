@@ -66,6 +66,12 @@ export class CreatePeriodDto {
   @IsOptional()
   transportCost?: number;
 
+  @ApiPropertyOptional({ example: 21, description: 'Percentatge d\'IVA per al transport (0-100)', default: 21 })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @IsOptional()
+  transportTaxRate?: number;
+
   @ApiPropertyOptional({ type: [CreatePeriodArticleDto], description: 'Artículos asociados al período con sus precios' })
   @IsArray()
   @IsOptional()

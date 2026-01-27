@@ -65,6 +65,10 @@ export class PeriodResponseDto {
   @Expose()
   transportCost?: number;
 
+  @ApiPropertyOptional({ example: 21, description: 'Percentatge d\'IVA per al transport (0-100)', default: 21 })
+  @Expose()
+  transportTaxRate?: number;
+
   @ApiPropertyOptional({ type: [PeriodArticleResponseDto] })
   @Expose()
   @Type(() => PeriodArticleResponseDto)
