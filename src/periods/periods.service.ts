@@ -45,6 +45,7 @@ export class PeriodsService {
       deliveryDate,
       recurrence: createPeriodDto.recurrence || PeriodRecurrence.CUSTOM,
       transportCost: createPeriodDto.transportCost ?? undefined,
+      transportTaxRate: createPeriodDto.transportTaxRate ?? 21,
     });
 
     const savedPeriod = await this.periodsRepository.save(period);
@@ -82,7 +83,14 @@ export class PeriodsService {
       order: { startDate: 'DESC' },
     });
 
-    return periods.map(period => new PeriodResponseDto(period));
+    return periods.map(period => {
+      // Assegurar que transportTaxRate sempre tingui un valor vàlid
+      const periodDto = new PeriodResponseDto({
+        ...period,
+        transportTaxRate: period.transportTaxRate ?? 21,
+      });
+      return periodDto;
+    });
   }
 
   async findOne(id: string, consumerGroupId: string): Promise<PeriodResponseDto> {
@@ -98,7 +106,11 @@ export class PeriodsService {
     // Verificar que el proveedor pertenece al consumer group
     await this.suppliersService.findOne(period.supplierId, consumerGroupId);
 
-    return new PeriodResponseDto(period);
+    // Assegurar que transportTaxRate sempre tingui un valor vàlid
+    return new PeriodResponseDto({
+      ...period,
+      transportTaxRate: period.transportTaxRate ?? 21,
+    });
   }
 
   async update(id: string, consumerGroupId: string, updatePeriodDto: UpdatePeriodDto): Promise<PeriodResponseDto> {
@@ -144,6 +156,9 @@ export class PeriodsService {
       transportCost: updatePeriodDto.transportCost !== undefined 
         ? (updatePeriodDto.transportCost === null ? undefined : updatePeriodDto.transportCost)
         : periodEntity.transportCost,
+      transportTaxRate: updatePeriodDto.transportTaxRate !== undefined 
+        ? (updatePeriodDto.transportTaxRate === null ? 21 : updatePeriodDto.transportTaxRate)
+        : periodEntity.transportTaxRate,
     });
 
     await this.periodsRepository.save(periodEntity);
