@@ -44,6 +44,7 @@ import { AddHashToArticles1737400000000 } from '../migrations/1737400000000-AddH
 import { AddTransportCostToPeriods1737500000000 } from '../migrations/1737500000000-AddTransportCostToPeriods';
 import { AddTransportTaxRateToPeriods1737600000000 } from '../migrations/1737600000000-AddTransportTaxRateToPeriods';
 import { AddCustomizationOptions1769080326265 } from '../migrations/1769080326265-AddCustomizationOptions';
+import { RemovePartialPaymentStatus1769555400000 } from '../migrations/1769555400000-RemovePartialPaymentStatus';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -91,6 +92,7 @@ export const AppDataSource = new DataSource({
     AddTransportCostToPeriods1737500000000,
     AddTransportTaxRateToPeriods1737600000000,
     AddCustomizationOptions1769080326265,
+    RemovePartialPaymentStatus1769555400000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
