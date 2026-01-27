@@ -917,7 +917,14 @@ export class OrdersService {
           order.paymentStatus = PaymentStatus.UNPAID;
         }
 
-        await queryRunner.manager.save(validItems);
+        // Actualitzar només el paidAmount dels items per evitar problemes amb les relacions
+        for (const item of validItems) {
+          await queryRunner.manager.update(
+            OrderItem,
+            { id: item.id },
+            { paidAmount: item.paidAmount }
+          );
+        }
         await queryRunner.manager.save(order);
       }
 
@@ -994,7 +1001,14 @@ export class OrdersService {
           order.paymentStatus = PaymentStatus.UNPAID;
         }
 
-        await queryRunner.manager.save(validItems);
+        // Actualitzar només el paidAmount dels items per evitar problemes amb les relacions
+        for (const item of validItems) {
+          await queryRunner.manager.update(
+            OrderItem,
+            { id: item.id },
+            { paidAmount: item.paidAmount }
+          );
+        }
         await queryRunner.manager.save(order);
       }
 
