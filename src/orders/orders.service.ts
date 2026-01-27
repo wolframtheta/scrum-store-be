@@ -526,12 +526,23 @@ export class OrdersService {
       order.totalAmount = Number(newOrderTotalAmount.toFixed(2));
       order.paidAmount = Number(newOrderPaidAmount.toFixed(2));
       
-      // Recalculate payment status
-      if (newOrderTotalAmount === 0) {
+      // Recalculate payment status comparant amb el total amb IVA
+      // Calcular el total amb IVA de tots els items de la comanda
+      let totalAmountWithTax = 0;
+      for (const item of remainingItems) {
+        const itemSubtotal = item.id === itemId ? newTotalPrice : Number(item.totalPrice || 0);
+        const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+        const itemTax = itemSubtotal * (taxRate / 100);
+        const itemTotalWithTax = itemSubtotal + itemTax;
+        totalAmountWithTax += itemTotalWithTax;
+      }
+      const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
+      
+      if (totalAmountWithTaxRounded === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
       } else if (newOrderPaidAmount === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
-      } else if (newOrderPaidAmount >= newOrderTotalAmount) {
+      } else if (newOrderPaidAmount >= totalAmountWithTaxRounded) {
         order.paymentStatus = PaymentStatus.PAID;
       } else {
         order.paymentStatus = PaymentStatus.PARTIAL;
@@ -631,12 +642,23 @@ export class OrdersService {
       order.totalAmount = Number(newTotalAmount.toFixed(2));
       order.paidAmount = Number(newPaidAmount.toFixed(2));
       
-      // Recalculate payment status
-      if (newTotalAmount === 0) {
+      // Recalculate payment status comparant amb el total amb IVA
+      // Calcular el total amb IVA de tots els items de la comanda
+      let totalAmountWithTax = 0;
+      for (const item of remainingItems) {
+        const itemSubtotal = Number(item.totalPrice || 0);
+        const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+        const itemTax = itemSubtotal * (taxRate / 100);
+        const itemTotalWithTax = itemSubtotal + itemTax;
+        totalAmountWithTax += itemTotalWithTax;
+      }
+      const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
+      
+      if (totalAmountWithTaxRounded === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
       } else if (newPaidAmount === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
-      } else if (newPaidAmount >= newTotalAmount) {
+      } else if (newPaidAmount >= totalAmountWithTaxRounded) {
         order.paymentStatus = PaymentStatus.PAID;
       } else {
         order.paymentStatus = PaymentStatus.PARTIAL;
@@ -857,15 +879,31 @@ export class OrdersService {
 
     try {
       // Obtenir totes les comandes del usuari al grup que tenen items d'aquest període
+      // Primer obtenir les comandes que tenen items d'aquest període
+      const ordersWithPeriodItems = await this.ordersRepository
+        .createQueryBuilder('order')
+        .leftJoin('order.items', 'items')
+        .where('order.consumer_group_id = :groupId', { groupId })
+        .andWhere('order.user_id = :userId', { userId })
+        .andWhere('items.period_id = :periodId', { periodId })
+        .select('DISTINCT order.id')
+        .getRawMany();
+      
+      const orderIds = ordersWithPeriodItems.map(o => o.order_id);
+      
+      if (orderIds.length === 0) {
+        await queryRunner.commitTransaction();
+        return this.getPeriodPaymentSummary(periodId, groupId);
+      }
+      
+      // Ara carregar les comandes completes amb TOTS els seus items (no només els del període)
       const orders = await this.ordersRepository
         .createQueryBuilder('order')
         .leftJoinAndSelect('order.items', 'items')
         .leftJoinAndSelect('items.article', 'article')
         .leftJoinAndSelect('items.period', 'period')
         .leftJoinAndSelect('order.user', 'user')
-        .where('order.consumer_group_id = :groupId', { groupId })
-        .andWhere('order.user_id = :userId', { userId })
-        .andWhere('items.period_id = :periodId', { periodId })
+        .where('order.id IN (:...orderIds)', { orderIds })
         .getMany();
 
       // Filtrar comandes que tenen items vàlids d'aquest període
@@ -907,9 +945,21 @@ export class OrdersService {
         // Nou paidAmount = existingPaidAmount - existingPeriodPaid + periodItemsPaidAmount
         order.paidAmount = Number((existingPaidAmount - existingPeriodPaid + periodItemsPaidAmount).toFixed(2));
 
-        // Recalcular estat de pagament de la comanda
-        const totalAmount = Number(order.totalAmount || 0);
-        if (order.paidAmount >= totalAmount) {
+        // Recalcular el totalAmount de la comanda amb IVA inclòs per poder comparar correctament
+        // Calcular el total amb IVA de tots els items de la comanda
+        const allOrderItems = order.items || [];
+        let totalAmountWithTax = 0;
+        for (const item of allOrderItems) {
+          const itemSubtotal = Number(item.totalPrice || 0);
+          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+          const itemTax = itemSubtotal * (taxRate / 100);
+          const itemTotalWithTax = itemSubtotal + itemTax;
+          totalAmountWithTax += itemTotalWithTax;
+        }
+        const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
+
+        // Recalcular estat de pagament de la comanda comparant amb el total amb IVA
+        if (order.paidAmount >= totalAmountWithTaxRounded) {
           order.paymentStatus = PaymentStatus.PAID;
         } else if (order.paidAmount > 0) {
           order.paymentStatus = PaymentStatus.PARTIAL;
@@ -959,15 +1009,31 @@ export class OrdersService {
 
     try {
       // Obtenir totes les comandes del usuari al grup que tenen items d'aquest període
+      // Primer obtenir les comandes que tenen items d'aquest període
+      const ordersWithPeriodItems = await this.ordersRepository
+        .createQueryBuilder('order')
+        .leftJoin('order.items', 'items')
+        .where('order.consumer_group_id = :groupId', { groupId })
+        .andWhere('order.user_id = :userId', { userId })
+        .andWhere('items.period_id = :periodId', { periodId })
+        .select('DISTINCT order.id')
+        .getRawMany();
+      
+      const orderIds = ordersWithPeriodItems.map(o => o.order_id);
+      
+      if (orderIds.length === 0) {
+        await queryRunner.commitTransaction();
+        return this.getPeriodPaymentSummary(periodId, groupId);
+      }
+      
+      // Ara carregar les comandes completes amb TOTS els seus items (no només els del període)
       const orders = await this.ordersRepository
         .createQueryBuilder('order')
         .leftJoinAndSelect('order.items', 'items')
         .leftJoinAndSelect('items.article', 'article')
         .leftJoinAndSelect('items.period', 'period')
         .leftJoinAndSelect('order.user', 'user')
-        .where('order.consumer_group_id = :groupId', { groupId })
-        .andWhere('order.user_id = :userId', { userId })
-        .andWhere('items.period_id = :periodId', { periodId })
+        .where('order.id IN (:...orderIds)', { orderIds })
         .getMany();
 
       // Filtrar comandes que tenen items vàlids d'aquest període
@@ -999,9 +1065,21 @@ export class OrdersService {
         const existingPaidAmount = Number(order.paidAmount || 0);
         order.paidAmount = Number(Math.max(0, existingPaidAmount - existingPeriodPaid).toFixed(2));
 
-        // Recalcular estat de pagament de la comanda
-        const totalAmount = Number(order.totalAmount || 0);
-        if (order.paidAmount >= totalAmount) {
+        // Recalcular el totalAmount de la comanda amb IVA inclòs per poder comparar correctament
+        // Calcular el total amb IVA de tots els items de la comanda
+        const allOrderItems = order.items || [];
+        let totalAmountWithTax = 0;
+        for (const item of allOrderItems) {
+          const itemSubtotal = Number(item.totalPrice || 0);
+          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+          const itemTax = itemSubtotal * (taxRate / 100);
+          const itemTotalWithTax = itemSubtotal + itemTax;
+          totalAmountWithTax += itemTotalWithTax;
+        }
+        const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
+
+        // Recalcular estat de pagament de la comanda comparant amb el total amb IVA
+        if (order.paidAmount >= totalAmountWithTaxRounded) {
           order.paymentStatus = PaymentStatus.PAID;
         } else if (order.paidAmount > 0) {
           order.paymentStatus = PaymentStatus.PARTIAL;
