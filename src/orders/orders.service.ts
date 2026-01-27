@@ -778,26 +778,38 @@ export class OrdersService {
     const userSummaries: UserPaymentSummaryDto[] = Array.from(userMap.values()).map(userData => {
       const total = Number((userData.subtotal + transportCostPerUser).toFixed(2));
       
-      // Calcular quantitat pagada i estat de pagament
+      // Calcular quantitat pagada i estat de pagament basant-se només en els items d'aquest període
       let paidAmount = 0;
-      let allPaid = true;
-      let anyPaid = false;
+      let totalPeriodItemsAmount = 0;
       
       for (const order of userData.orders) {
-        paidAmount += Number(order.paidAmount || 0);
-        if (order.paymentStatus !== PaymentStatus.PAID) {
-          allPaid = false;
-        }
-        if (order.paymentStatus === PaymentStatus.PAID || order.paymentStatus === PaymentStatus.PARTIAL) {
-          anyPaid = true;
+        // Filtrar només els items d'aquest període
+        const periodItems = order.items.filter(item => 
+          item.periodId === periodId && 
+          item.articleId !== null && 
+          item.articleId !== undefined
+        );
+        
+        // Sumar el paidAmount dels items d'aquest període
+        for (const item of periodItems) {
+          const itemSubtotal = Number(item.totalPrice || 0);
+          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+          const itemTax = itemSubtotal * (taxRate / 100);
+          const itemTotalWithTax = itemSubtotal + itemTax;
+          
+          paidAmount += Number(item.paidAmount || 0);
+          totalPeriodItemsAmount += itemTotalWithTax;
         }
       }
       
-      // Determinar estat de pagament general
+      // Determinar estat de pagament basant-se en si tots els items del període estan pagats
       let paymentStatus: PaymentStatus;
-      if (allPaid && userData.orders.length > 0) {
+      const roundedPaidAmount = Number(paidAmount.toFixed(2));
+      const roundedTotalAmount = Number(totalPeriodItemsAmount.toFixed(2));
+      
+      if (roundedPaidAmount >= roundedTotalAmount && userData.orders.length > 0) {
         paymentStatus = PaymentStatus.PAID;
-      } else if (anyPaid) {
+      } else if (roundedPaidAmount > 0) {
         paymentStatus = PaymentStatus.PARTIAL;
       } else {
         paymentStatus = PaymentStatus.UNPAID;

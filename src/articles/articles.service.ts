@@ -43,6 +43,16 @@ export class ArticlesService {
   }
 
   /**
+   * Elimina los acentos y diacríticos de un string
+   */
+  private removeAccents(str: string): string {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  /**
    * Genera un hash único para un artículo basado en:
    * proveedor + categoría + producto + variedad
    * Todos los valores se normalizan (trim y uppercase) para evitar duplicados
@@ -297,14 +307,25 @@ export class ArticlesService {
     }
 
     if (search) {
+      const normalizedSearch = this.removeAccents(search);
       queryBuilder.andWhere(
-        '(LOWER(article.category) LIKE LOWER(:search) OR LOWER(article.product) LIKE LOWER(:search) OR LOWER(article.variety) LIKE LOWER(:search) OR LOWER(article.description) LIKE LOWER(:search) OR LOWER(producer.name) LIKE LOWER(:search))',
-        { search: `%${search}%` },
+        `(
+          LOWER(TRANSLATE(article.category, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search) OR
+          LOWER(TRANSLATE(article.product, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search) OR
+          LOWER(TRANSLATE(article.variety, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search) OR
+          LOWER(TRANSLATE(article.description, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search) OR
+          LOWER(TRANSLATE(producer.name, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search)
+        )`,
+        { search: `%${normalizedSearch}%` },
       );
     }
 
     if (productSearch) {
-      queryBuilder.andWhere('LOWER(article.product) LIKE LOWER(:productSearch)', { productSearch: `%${productSearch}%` });
+      const normalizedProductSearch = this.removeAccents(productSearch);
+      queryBuilder.andWhere(
+        'LOWER(TRANSLATE(article.product, \'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ\', \'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC\')) LIKE LOWER(:productSearch)',
+        { productSearch: `%${normalizedProductSearch}%` }
+      );
     }
 
     // Filtrar per període si s'especifica
