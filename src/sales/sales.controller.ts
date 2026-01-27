@@ -118,7 +118,7 @@ export class SalesController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Pago registrado exitosamente. El estado de la venta se actualiza automáticamente (UNPAID → PARTIAL → PAID).',
+    description: 'Pago registrado exitosamente. El estado de la venta se actualiza automáticamente (UNPAID → PAID).',
     type: SaleResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Datos inválidos o pago excede el total' })

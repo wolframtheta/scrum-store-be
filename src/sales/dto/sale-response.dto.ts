@@ -70,7 +70,7 @@ export class SaleResponseDto {
   @Expose()
   paidAmount: number;
 
-  @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.PARTIAL })
+  @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.PAID })
   @Expose()
   paymentStatus: PaymentStatus;
 

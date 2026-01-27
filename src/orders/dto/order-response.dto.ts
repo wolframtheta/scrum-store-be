@@ -118,7 +118,7 @@ export class OrderResponseDto {
   @Expose()
   transportCost?: number;
 
-  @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.PARTIAL })
+  @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.PAID })
   @Expose()
   paymentStatus: PaymentStatus;
 

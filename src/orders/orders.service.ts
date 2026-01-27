@@ -545,7 +545,7 @@ export class OrdersService {
       } else if (newOrderPaidAmount >= totalAmountWithTaxRounded) {
         order.paymentStatus = PaymentStatus.PAID;
       } else {
-        order.paymentStatus = PaymentStatus.PARTIAL;
+        order.paymentStatus = PaymentStatus.UNPAID;
       }
       
       // Save the order
@@ -661,7 +661,7 @@ export class OrdersService {
       } else if (newPaidAmount >= totalAmountWithTaxRounded) {
         order.paymentStatus = PaymentStatus.PAID;
       } else {
-        order.paymentStatus = PaymentStatus.PARTIAL;
+        order.paymentStatus = PaymentStatus.UNPAID;
       }
       
       // Save the order with updated items and amounts
@@ -831,8 +831,6 @@ export class OrdersService {
       
       if (roundedPaidAmount >= roundedTotalAmount && userData.orders.length > 0) {
         paymentStatus = PaymentStatus.PAID;
-      } else if (roundedPaidAmount > 0) {
-        paymentStatus = PaymentStatus.PARTIAL;
       } else {
         paymentStatus = PaymentStatus.UNPAID;
       }
@@ -923,29 +921,6 @@ export class OrdersService {
           item.articleId !== undefined
         );
 
-        let periodItemsPaidAmount = 0;
-        let periodItemsTotalAmount = 0;
-
-        for (const item of validItems) {
-          const itemSubtotal = Number(item.totalPrice || 0);
-          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-          const itemTax = itemSubtotal * (taxRate / 100);
-          const itemTotalWithTax = itemSubtotal + itemTax;
-          
-          // Marcar item com a pagat
-          item.paidAmount = Number(itemTotalWithTax.toFixed(2));
-          periodItemsPaidAmount += itemTotalWithTax;
-          periodItemsTotalAmount += itemSubtotal;
-        }
-
-        // Actualitzar paidAmount de la comanda (sumar el que ja estava pagat + el nou)
-        const existingPaidAmount = Number(order.paidAmount || 0);
-        // Calcular quant ja estava pagat dels items d'aquest període
-        const existingPeriodPaid = validItems.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
-        // Nou paidAmount = existingPaidAmount - existingPeriodPaid + periodItemsPaidAmount
-        order.paidAmount = Number((existingPaidAmount - existingPeriodPaid + periodItemsPaidAmount).toFixed(2));
-
-        // Recalcular el totalAmount de la comanda amb IVA inclòs per poder comparar correctament
         // Calcular el total amb IVA de tots els items de la comanda
         const allOrderItems = order.items || [];
         let totalAmountWithTax = 0;
@@ -958,17 +933,22 @@ export class OrdersService {
         }
         const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
 
-        // Recalcular estat de pagament de la comanda comparant amb el total amb IVA
-        if (order.paidAmount >= totalAmountWithTaxRounded) {
-          order.paymentStatus = PaymentStatus.PAID;
-        } else if (order.paidAmount > 0) {
-          order.paymentStatus = PaymentStatus.PARTIAL;
-        } else {
-          order.paymentStatus = PaymentStatus.UNPAID;
+        // Quan es marca com a pagat des del resum, establir el paidAmount igual al total amb IVA
+        // i marcar tots els items de la comanda com a pagats
+        order.paidAmount = totalAmountWithTaxRounded;
+        order.paymentStatus = PaymentStatus.PAID;
+        
+        // Marcar tots els items de la comanda com a pagats (no només els del període)
+        for (const item of allOrderItems) {
+          const itemSubtotal = Number(item.totalPrice || 0);
+          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
+          const itemTax = itemSubtotal * (taxRate / 100);
+          const itemTotalWithTax = itemSubtotal + itemTax;
+          item.paidAmount = Number(itemTotalWithTax.toFixed(2));
         }
 
-        // Actualitzar només el paidAmount dels items per evitar problemes amb les relacions
-        for (const item of validItems) {
+        // Actualitzar el paidAmount de tots els items de la comanda (no només els del període)
+        for (const item of allOrderItems) {
           await queryRunner.manager.update(
             OrderItem,
             { id: item.id },
@@ -1081,8 +1061,6 @@ export class OrdersService {
         // Recalcular estat de pagament de la comanda comparant amb el total amb IVA
         if (order.paidAmount >= totalAmountWithTaxRounded) {
           order.paymentStatus = PaymentStatus.PAID;
-        } else if (order.paidAmount > 0) {
-          order.paymentStatus = PaymentStatus.PARTIAL;
         } else {
           order.paymentStatus = PaymentStatus.UNPAID;
         }

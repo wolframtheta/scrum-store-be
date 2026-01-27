@@ -5,7 +5,6 @@ import { OrderItem } from './order-item.entity';
 
 export enum PaymentStatus {
   UNPAID = 'unpaid',
-  PARTIAL = 'partial',
   PAID = 'paid',
 }
 

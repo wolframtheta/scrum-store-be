@@ -245,8 +245,6 @@ export class SalesService {
       // Update payment status
       if (totalPaid >= Number(sale.totalAmount)) {
         sale.paymentStatus = PaymentStatus.PAID;
-      } else if (totalPaid > 0) {
-        sale.paymentStatus = PaymentStatus.PARTIAL;
       } else {
         sale.paymentStatus = PaymentStatus.UNPAID;
       }
