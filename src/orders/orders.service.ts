@@ -925,7 +925,15 @@ export class OrdersService {
             { paidAmount: item.paidAmount }
           );
         }
-        await queryRunner.manager.save(order);
+        // Actualitzar només els camps de l'order sense sincronitzar els items
+        await queryRunner.manager.update(
+          Order,
+          { id: order.id },
+          { 
+            paidAmount: order.paidAmount,
+            paymentStatus: order.paymentStatus
+          }
+        );
       }
 
       await queryRunner.commitTransaction();
@@ -1009,7 +1017,15 @@ export class OrdersService {
             { paidAmount: item.paidAmount }
           );
         }
-        await queryRunner.manager.save(order);
+        // Actualitzar només els camps de l'order sense sincronitzar els items
+        await queryRunner.manager.update(
+          Order,
+          { id: order.id },
+          { 
+            paidAmount: order.paidAmount,
+            paymentStatus: order.paymentStatus
+          }
+        );
       }
 
       await queryRunner.commitTransaction();
