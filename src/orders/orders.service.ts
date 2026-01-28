@@ -195,7 +195,6 @@ export class OrdersService {
           quantity: itemDto.quantity,
           pricePerUnit: article.pricePerUnit,
           totalPrice,
-          paidAmount: 0,
           selectedOptions: itemDto.selectedOptions,
         });
 
