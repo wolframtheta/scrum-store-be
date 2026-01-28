@@ -57,19 +57,20 @@ export class OrdersService {
       return 0;
     }
 
-    // Agrupar items per període
-    const periodMap = new Map<string, { transportCost: number; supplierId: string }>();
+    // Agrupar items per període (transport_cost és sense IVA; retornem amb IVA)
+    const periodMap = new Map<string, { transportCost: number; transportTaxRate: number; supplierId: string }>();
 
-    // Recopilar períodes únics amb el seu cost de transport
+    // Recopilar períodes únics amb el seu cost de transport i tipus d'IVA
     for (const item of order.items) {
       if (!item.period || !item.period.transportCost) continue;
 
       const periodId = item.period.id;
       const transportCost = Number(item.period.transportCost);
+      const transportTaxRate = item.period.transportTaxRate != null ? Number(item.period.transportTaxRate) : 21;
       const supplierId = item.period.supplierId;
 
       if (!periodMap.has(periodId)) {
-        periodMap.set(periodId, { transportCost, supplierId });
+        periodMap.set(periodId, { transportCost, transportTaxRate, supplierId });
       }
     }
 
@@ -93,9 +94,10 @@ export class OrdersService {
       const userCount = uniqueUsersInPeriod.length;
 
       if (userCount > 0) {
-        // Repartir el cost entre tots els usuaris únics
-        const costPerUser = periodInfo.transportCost / userCount;
-        totalTransportCost += Number(costPerUser.toFixed(2));
+        // Repartir el cost (sense IVA) entre usuaris i aplicar IVA
+        const costPerUserExclTax = periodInfo.transportCost / userCount;
+        const costPerUserWithTax = costPerUserExclTax * (1 + periodInfo.transportTaxRate / 100);
+        totalTransportCost += Number(costPerUserWithTax.toFixed(2));
       }
     }
 
@@ -779,11 +781,13 @@ export class OrdersService {
       userData.subtotal += periodItemsSubtotal;
     }
 
-    // Calcular el cost de transport repartit per usuari
+    // Calcular el cost de transport repartit per usuari (amb IVA)
     const uniqueUserIds = Array.from(userMap.keys());
-    const transportCost = period.transportCost ? Number(period.transportCost) : 0;
-    const transportCostPerUser = uniqueUserIds.length > 0 
-      ? Number((transportCost / uniqueUserIds.length).toFixed(2))
+    const transportCostExclTax = period.transportCost ? Number(period.transportCost) : 0;
+    const transportTaxRate = period.transportTaxRate != null ? Number(period.transportTaxRate) : 21;
+    const transportCostWithTax = transportCostExclTax * (1 + transportTaxRate / 100);
+    const transportCostPerUser = uniqueUserIds.length > 0
+      ? Number((transportCostWithTax / uniqueUserIds.length).toFixed(2))
       : 0;
 
     // Precalcular transport per comanda (per considerar "totalment pagada" = productes + transport)
@@ -848,9 +852,9 @@ export class OrdersService {
     // Ordenar per nom d'usuari
     userSummaries.sort((a, b) => a.userName.localeCompare(b.userName));
 
-    // Calcular totals generals
+    // Calcular totals generals (transport amb IVA)
     const totalSubtotal = userSummaries.reduce((sum, u) => sum + u.subtotal, 0);
-    const totalTransportCost = transportCost;
+    const totalTransportCost = Number(transportCostWithTax.toFixed(2));
     const grandTotal = Number((totalSubtotal + totalTransportCost).toFixed(2));
 
     return new PeriodPaymentSummaryDto({
@@ -967,7 +971,9 @@ export class OrdersService {
       );
 
       const period = await this.periodsService.findOne(periodId, groupId);
-      const transportCost = period?.transportCost ? Number(period.transportCost) : 0;
+      const transportCostExclTax = period?.transportCost ? Number(period.transportCost) : 0;
+      const transportTaxRate = period?.transportTaxRate != null ? Number(period.transportTaxRate) : 21;
+      const transportCostWithTax = transportCostExclTax * (1 + transportTaxRate / 100);
       const uniqueUsersInPeriod = await this.ordersRepository
         .createQueryBuilder('order')
         .innerJoin('order.items', 'item')
@@ -976,7 +982,7 @@ export class OrdersService {
         .select('DISTINCT order.user_id')
         .getRawMany();
       const transportCostPerUser = uniqueUsersInPeriod.length > 0
-        ? Number((transportCost / uniqueUsersInPeriod.length).toFixed(2))
+        ? Number((transportCostWithTax / uniqueUsersInPeriod.length).toFixed(2))
         : 0;
 
       for (const order of ordersToUpdate) {
