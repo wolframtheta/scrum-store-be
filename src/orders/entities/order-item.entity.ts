@@ -38,9 +38,6 @@ export class OrderItem {
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'total_price' })
   totalPrice: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, name: 'paid_amount', default: 0 })
-  paidAmount: number;
-
   @Column({ type: 'jsonb', nullable: true, name: 'selected_options' })
   selectedOptions?: SelectedOption[];
 }

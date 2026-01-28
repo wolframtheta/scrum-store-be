@@ -45,6 +45,7 @@ import { AddTransportCostToPeriods1737500000000 } from '../migrations/1737500000
 import { AddTransportTaxRateToPeriods1737600000000 } from '../migrations/1737600000000-AddTransportTaxRateToPeriods';
 import { AddCustomizationOptions1769080326265 } from '../migrations/1769080326265-AddCustomizationOptions';
 import { RemovePartialPaymentStatus1769555400000 } from '../migrations/1769555400000-RemovePartialPaymentStatus';
+import { RemovePaidAmountFromOrderItems1769591246000 } from '../migrations/1769591246000-RemovePaidAmountFromOrderItems';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -93,6 +94,7 @@ export const AppDataSource = new DataSource({
     AddTransportTaxRateToPeriods1737600000000,
     AddCustomizationOptions1769080326265,
     RemovePartialPaymentStatus1769555400000,
+    RemovePaidAmountFromOrderItems1769591246000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',

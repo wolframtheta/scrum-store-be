@@ -44,7 +44,6 @@ export class OrdersService {
       quantity: item.quantity,
       pricePerUnit: item.pricePerUnit,
       totalPrice: item.totalPrice,
-      paidAmount: item.paidAmount,
       selectedOptions: item.selectedOptions,
     });
   }
@@ -378,27 +377,19 @@ export class OrdersService {
         throw new NotFoundException(`Order with ID ${id} not found`);
       }
 
-      // Calculate total with tax for each item
+      // Calculate total with tax (totalPrice ja inclou IVA)
       const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
       
       let totalPaid = 0;
       for (const item of validItems) {
-        const itemSubtotal = Number(item.totalPrice || 0);
-        const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-        const itemTax = itemSubtotal * (taxRate / 100);
-        const itemTotalWithTax = itemSubtotal + itemTax;
-        
-        // Mark item as fully paid
-        item.paidAmount = Number(itemTotalWithTax.toFixed(2));
-        totalPaid += itemTotalWithTax;
+        totalPaid += Number(item.totalPrice || 0);
       }
 
       // Update order payment status
       order.paidAmount = Number(totalPaid.toFixed(2));
       order.paymentStatus = PaymentStatus.PAID;
 
-      // Save items and order
-      await queryRunner.manager.save(validItems);
+      // Save order (no cal guardar items, només l'order)
       await queryRunner.manager.save(order);
 
       await queryRunner.commitTransaction();
@@ -470,9 +461,9 @@ export class OrdersService {
     await queryRunner.startTransaction();
 
     try {
-      // Store old values for recalculation
-      const oldTotalPrice = Number(itemToUpdate.totalPrice || 0);
-      const oldPaidAmount = Number(itemToUpdate.paidAmount || 0);
+      // Store old total for recalculation
+      const oldTotalAmount = Number(order.totalAmount || 0);
+      const oldItemTotalPrice = Number(itemToUpdate.totalPrice || 0);
 
       // Update quantity if provided
       if (updateDto.quantity !== undefined) {
@@ -510,19 +501,6 @@ export class OrdersService {
       const newTotalPrice = Number((subtotal + taxAmount).toFixed(2));
       itemToUpdate.totalPrice = newTotalPrice;
 
-      // Adjust paid amount proportionally if total price changed
-      let newPaidAmount = oldPaidAmount;
-      if (oldTotalPrice > 0 && newTotalPrice !== oldTotalPrice) {
-        // Maintain the same payment percentage
-        const paymentPercentage = oldPaidAmount / oldTotalPrice;
-        newPaidAmount = Number((newTotalPrice * paymentPercentage).toFixed(2));
-        // Don't allow paid amount to exceed total price
-        if (newPaidAmount > newTotalPrice) {
-          newPaidAmount = newTotalPrice;
-        }
-        itemToUpdate.paidAmount = newPaidAmount;
-      }
-
       // Save the updated item
       await queryRunner.manager.save(itemToUpdate);
 
@@ -533,10 +511,18 @@ export class OrdersService {
         return sum + itemTotal;
       }, 0);
 
-      const newOrderPaidAmount = remainingItems.reduce((sum, item) => {
-        const itemPaid = item.id === itemId ? newPaidAmount : Number(item.paidAmount || 0);
-        return sum + itemPaid;
-      }, 0);
+      // Ajustar paidAmount proporcionalment si el totalAmount ha canviat
+      const currentPaidAmount = Number(order.paidAmount || 0);
+      let newOrderPaidAmount = currentPaidAmount;
+      if (oldTotalAmount > 0 && newOrderTotalAmount !== oldTotalAmount) {
+        // Mantenir el mateix percentatge de pagament
+        const paymentPercentage = currentPaidAmount / oldTotalAmount;
+        newOrderPaidAmount = Number((newOrderTotalAmount * paymentPercentage).toFixed(2));
+        // No permetre que paidAmount superi totalAmount
+        if (newOrderPaidAmount > newOrderTotalAmount) {
+          newOrderPaidAmount = newOrderTotalAmount;
+        }
+      }
 
       // Update order amounts
       order.totalAmount = Number(newOrderTotalAmount.toFixed(2));
@@ -609,8 +595,9 @@ export class OrdersService {
     await queryRunner.startTransaction();
 
     try {
-      // Calculate paid amount to subtract from order
-      const paidAmountToSubtract = Number(itemToDelete.paidAmount || 0);
+      // Store old total for recalculation
+      const oldTotalAmount = Number(order.totalAmount || 0);
+      const deletedItemTotalPrice = Number(itemToDelete.totalPrice || 0);
       
       // Remove the item from the order's items array
       order.items = order.items.filter(item => item.id !== itemId);
@@ -633,15 +620,24 @@ export class OrdersService {
         });
       }
 
-      // Recalculate total amount and paid amount (totalAmount ja inclou IVA)
+      // Recalculate total amount (totalAmount ja inclou IVA)
       const remainingItems = order.items;
       const newTotalAmount = remainingItems.reduce((sum, item) => {
         return sum + Number(item.totalPrice);
       }, 0);
       
-      // Recalculate paid amount: subtract the paid amount of deleted item
+      // Ajustar paidAmount proporcionalment basant-nos en el canvi del totalAmount
       const currentPaidAmount = Number(order.paidAmount || 0);
-      const newPaidAmount = Math.max(0, currentPaidAmount - paidAmountToSubtract);
+      let newPaidAmount = currentPaidAmount;
+      if (oldTotalAmount > 0 && newTotalAmount !== oldTotalAmount) {
+        // Mantenir el mateix percentatge de pagament
+        const paymentPercentage = currentPaidAmount / oldTotalAmount;
+        newPaidAmount = Number((newTotalAmount * paymentPercentage).toFixed(2));
+        // No permetre que paidAmount superi totalAmount
+        if (newPaidAmount > newTotalAmount) {
+          newPaidAmount = newTotalAmount;
+        }
+      }
 
       // Update order amounts
       order.totalAmount = Number(newTotalAmount.toFixed(2));
@@ -795,6 +791,7 @@ export class OrdersService {
       const total = Number((userData.subtotal + transportCostPerUser).toFixed(2));
       
       // Calcular quantitat pagada i estat de pagament basant-se només en els items d'aquest període
+      // paidAmount es calcula proporcionalment des del paidAmount de les comandes
       let paidAmount = 0;
       let totalPeriodItemsAmount = 0;
       
@@ -806,15 +803,25 @@ export class OrdersService {
           item.articleId !== undefined
         );
         
-        // Sumar el paidAmount dels items d'aquest període
-        for (const item of periodItems) {
-          const itemSubtotal = Number(item.totalPrice || 0);
-          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-          const itemTax = itemSubtotal * (taxRate / 100);
-          const itemTotalWithTax = itemSubtotal + itemTax;
-          
-          paidAmount += Number(item.paidAmount || 0);
-          totalPeriodItemsAmount += itemTotalWithTax;
+        // Calcular el total dels items d'aquest període (totalPrice ja inclou IVA)
+        const periodItemsTotal = periodItems.reduce((sum, item) => 
+          sum + Number(item.totalPrice || 0), 0
+        );
+        totalPeriodItemsAmount += periodItemsTotal;
+        
+        // Calcular el paidAmount proporcional d'aquest període
+        const orderTotalAmount = Number(order.totalAmount || 0);
+        const orderPaidAmount = Number(order.paidAmount || 0);
+        
+        if (orderTotalAmount > 0) {
+          // Si la comanda està completament pagada, tots els items del període estan pagats
+          if (orderPaidAmount >= orderTotalAmount) {
+            paidAmount += periodItemsTotal;
+          } else {
+            // Si no està completament pagada, calcular proporcionalment
+            const paymentPercentage = orderPaidAmount / orderTotalAmount;
+            paidAmount += periodItemsTotal * paymentPercentage;
+          }
         }
       }
       
@@ -924,25 +931,10 @@ export class OrdersService {
         const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
 
         // Quan es marca com a pagat des del resum, establir el paidAmount igual al total amb IVA
-        // i marcar tots els items de la comanda com a pagats
         order.paidAmount = totalAmountWithTaxRounded;
         order.paymentStatus = PaymentStatus.PAID;
-        
-        // Marcar tots els items de la comanda com a pagats (no només els del període)
-        // totalPrice ja inclou IVA, així que paidAmount = totalPrice
-        for (const item of allOrderItems) {
-          item.paidAmount = Number(item.totalPrice || 0);
-        }
 
-        // Actualitzar el paidAmount de tots els items de la comanda (no només els del període)
-        for (const item of allOrderItems) {
-          await queryRunner.manager.update(
-            OrderItem,
-            { id: item.id },
-            { paidAmount: item.paidAmount }
-          );
-        }
-        // Actualitzar només els camps de l'order sense sincronitzar els items
+        // Actualitzar només els camps de l'order (paidAmount només està a nivell de comanda)
         await queryRunner.manager.update(
           Order,
           { id: order.id },
@@ -1012,7 +1004,7 @@ export class OrdersService {
         )
       );
 
-      // Per cada comanda, marcar només els items del període com a no pagats
+      // Per cada comanda, marcar els items del període com a no pagats
       for (const order of ordersToUpdate) {
         const validItems = (order.items || []).filter(item => 
           item.periodId === periodId && 
@@ -1020,42 +1012,43 @@ export class OrdersService {
           item.articleId !== undefined
         );
 
-        // Calcular quant estava pagat dels items d'aquest període
-        const existingPeriodPaid = validItems.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0);
+        // Calcular el total dels items d'aquest període (totalPrice ja inclou IVA)
+        const periodItemsTotal = validItems.reduce((sum, item) => 
+          sum + Number(item.totalPrice || 0), 0
+        );
 
-        // Marcar tots els items del període com a no pagats
-        for (const item of validItems) {
-          item.paidAmount = 0;
+        // Calcular el total de la comanda (totalPrice ja inclou IVA)
+        const allOrderItems = order.items || [];
+        const orderTotalAmount = allOrderItems.reduce((sum, item) => 
+          sum + Number(item.totalPrice || 0), 0
+        );
+
+        // Calcular quant estava pagat proporcionalment d'aquest període
+        const existingPaidAmount = Number(order.paidAmount || 0);
+        let existingPeriodPaid = 0;
+        
+        if (orderTotalAmount > 0 && existingPaidAmount > 0) {
+          // Si la comanda està completament pagada, tots els items del període estaven pagats
+          if (existingPaidAmount >= orderTotalAmount) {
+            existingPeriodPaid = periodItemsTotal;
+          } else {
+            // Si no està completament pagada, calcular proporcionalment
+            const paymentPercentage = existingPaidAmount / orderTotalAmount;
+            existingPeriodPaid = periodItemsTotal * paymentPercentage;
+          }
         }
 
         // Actualitzar paidAmount de la comanda (restar el que estava pagat d'aquest període)
-        const existingPaidAmount = Number(order.paidAmount || 0);
         order.paidAmount = Number(Math.max(0, existingPaidAmount - existingPeriodPaid).toFixed(2));
 
-        // Recalcular el totalAmount de la comanda (totalPrice ja inclou IVA)
-        const allOrderItems = order.items || [];
-        let totalAmountWithTax = 0;
-        for (const item of allOrderItems) {
-          totalAmountWithTax += Number(item.totalPrice || 0);
-        }
-        const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
-
         // Recalcular estat de pagament de la comanda (totalAmount ja inclou IVA)
-        if (order.paidAmount >= totalAmountWithTaxRounded) {
+        if (order.paidAmount >= orderTotalAmount) {
           order.paymentStatus = PaymentStatus.PAID;
         } else {
           order.paymentStatus = PaymentStatus.UNPAID;
         }
 
-        // Actualitzar només el paidAmount dels items per evitar problemes amb les relacions
-        for (const item of validItems) {
-          await queryRunner.manager.update(
-            OrderItem,
-            { id: item.id },
-            { paidAmount: item.paidAmount }
-          );
-        }
-        // Actualitzar només els camps de l'order sense sincronitzar els items
+        // Actualitzar només els camps de l'order (paidAmount només està a nivell de comanda)
         await queryRunner.manager.update(
           Order,
           { id: order.id },

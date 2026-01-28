@@ -70,10 +70,6 @@ export class OrderItemResponseDto {
   @Expose()
   totalPrice: number;
 
-  @ApiProperty({ example: 0 })
-  @Expose()
-  paidAmount: number;
-
   @ApiPropertyOptional({ type: 'array', description: 'Opciones de personalización seleccionadas' })
   @Expose()
   selectedOptions?: any[];
