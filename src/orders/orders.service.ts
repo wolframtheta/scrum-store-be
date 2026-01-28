@@ -178,7 +178,15 @@ export class OrdersService {
           }
         }
         
-        const totalPrice = Number((basePrice + customizationPrice).toFixed(2));
+        // Calcular subtotal sense IVA
+        const subtotal = basePrice + customizationPrice;
+        
+        // Calcular IVA
+        const taxRate = article.taxRate ? Number(article.taxRate) : 0;
+        const taxAmount = subtotal * (taxRate / 100);
+        
+        // Total amb IVA
+        const totalPrice = Number((subtotal + taxAmount).toFixed(2));
         totalAmount += totalPrice;
 
         const orderItem = this.orderItemsRepository.create({
@@ -197,8 +205,8 @@ export class OrdersService {
 
       await queryRunner.manager.save(orderItems);
 
-      // Update total amount
-      savedOrder.totalAmount = totalAmount;
+      // Update total amount (amb IVA inclòs)
+      savedOrder.totalAmount = Number(totalAmount.toFixed(2));
       await queryRunner.manager.save(savedOrder);
 
       await queryRunner.commitTransaction();
@@ -476,7 +484,7 @@ export class OrdersService {
         itemToUpdate.selectedOptions = updateDto.selectedOptions;
       }
 
-      // Recalculate total price for this item
+      // Recalculate total price for this item (amb IVA inclòs)
       const article = itemToUpdate.article;
       const quantity = Number(itemToUpdate.quantity);
       const basePrice = Number(article.pricePerUnit) * quantity;
@@ -491,7 +499,15 @@ export class OrdersService {
         }
       }
       
-      const newTotalPrice = Number((basePrice + customizationPrice).toFixed(2));
+      // Calcular subtotal sense IVA
+      const subtotal = basePrice + customizationPrice;
+      
+      // Calcular IVA
+      const taxRate = article.taxRate ? Number(article.taxRate) : 0;
+      const taxAmount = subtotal * (taxRate / 100);
+      
+      // Total amb IVA
+      const newTotalPrice = Number((subtotal + taxAmount).toFixed(2));
       itemToUpdate.totalPrice = newTotalPrice;
 
       // Adjust paid amount proportionally if total price changed
@@ -510,7 +526,7 @@ export class OrdersService {
       // Save the updated item
       await queryRunner.manager.save(itemToUpdate);
 
-      // Recalculate order totals
+      // Recalculate order totals (totalAmount ja inclou IVA)
       const remainingItems = order.items;
       const newOrderTotalAmount = remainingItems.reduce((sum, item) => {
         const itemTotal = item.id === itemId ? newTotalPrice : Number(item.totalPrice || 0);
@@ -526,23 +542,12 @@ export class OrdersService {
       order.totalAmount = Number(newOrderTotalAmount.toFixed(2));
       order.paidAmount = Number(newOrderPaidAmount.toFixed(2));
       
-      // Recalculate payment status comparant amb el total amb IVA
-      // Calcular el total amb IVA de tots els items de la comanda
-      let totalAmountWithTax = 0;
-      for (const item of remainingItems) {
-        const itemSubtotal = item.id === itemId ? newTotalPrice : Number(item.totalPrice || 0);
-        const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-        const itemTax = itemSubtotal * (taxRate / 100);
-        const itemTotalWithTax = itemSubtotal + itemTax;
-        totalAmountWithTax += itemTotalWithTax;
-      }
-      const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
-      
-      if (totalAmountWithTaxRounded === 0) {
+      // Recalculate payment status (totalAmount ja inclou IVA)
+      if (newOrderTotalAmount === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
       } else if (newOrderPaidAmount === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
-      } else if (newOrderPaidAmount >= totalAmountWithTaxRounded) {
+      } else if (newOrderPaidAmount >= newOrderTotalAmount) {
         order.paymentStatus = PaymentStatus.PAID;
       } else {
         order.paymentStatus = PaymentStatus.UNPAID;
@@ -628,7 +633,7 @@ export class OrdersService {
         });
       }
 
-      // Recalculate total amount and paid amount
+      // Recalculate total amount and paid amount (totalAmount ja inclou IVA)
       const remainingItems = order.items;
       const newTotalAmount = remainingItems.reduce((sum, item) => {
         return sum + Number(item.totalPrice);
@@ -642,23 +647,12 @@ export class OrdersService {
       order.totalAmount = Number(newTotalAmount.toFixed(2));
       order.paidAmount = Number(newPaidAmount.toFixed(2));
       
-      // Recalculate payment status comparant amb el total amb IVA
-      // Calcular el total amb IVA de tots els items de la comanda
-      let totalAmountWithTax = 0;
-      for (const item of remainingItems) {
-        const itemSubtotal = Number(item.totalPrice || 0);
-        const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-        const itemTax = itemSubtotal * (taxRate / 100);
-        const itemTotalWithTax = itemSubtotal + itemTax;
-        totalAmountWithTax += itemTotalWithTax;
-      }
-      const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
-      
-      if (totalAmountWithTaxRounded === 0) {
+      // Recalculate payment status (totalAmount ja inclou IVA)
+      if (newTotalAmount === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
       } else if (newPaidAmount === 0) {
         order.paymentStatus = PaymentStatus.UNPAID;
-      } else if (newPaidAmount >= totalAmountWithTaxRounded) {
+      } else if (newPaidAmount >= newTotalAmount) {
         order.paymentStatus = PaymentStatus.PAID;
       } else {
         order.paymentStatus = PaymentStatus.UNPAID;
@@ -921,15 +915,11 @@ export class OrdersService {
           item.articleId !== undefined
         );
 
-        // Calcular el total amb IVA de tots els items de la comanda
+        // Calcular el total de la comanda (totalPrice ja inclou IVA)
         const allOrderItems = order.items || [];
         let totalAmountWithTax = 0;
         for (const item of allOrderItems) {
-          const itemSubtotal = Number(item.totalPrice || 0);
-          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-          const itemTax = itemSubtotal * (taxRate / 100);
-          const itemTotalWithTax = itemSubtotal + itemTax;
-          totalAmountWithTax += itemTotalWithTax;
+          totalAmountWithTax += Number(item.totalPrice || 0);
         }
         const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
 
@@ -939,12 +929,9 @@ export class OrdersService {
         order.paymentStatus = PaymentStatus.PAID;
         
         // Marcar tots els items de la comanda com a pagats (no només els del període)
+        // totalPrice ja inclou IVA, així que paidAmount = totalPrice
         for (const item of allOrderItems) {
-          const itemSubtotal = Number(item.totalPrice || 0);
-          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-          const itemTax = itemSubtotal * (taxRate / 100);
-          const itemTotalWithTax = itemSubtotal + itemTax;
-          item.paidAmount = Number(itemTotalWithTax.toFixed(2));
+          item.paidAmount = Number(item.totalPrice || 0);
         }
 
         // Actualitzar el paidAmount de tots els items de la comanda (no només els del període)
@@ -1045,20 +1032,15 @@ export class OrdersService {
         const existingPaidAmount = Number(order.paidAmount || 0);
         order.paidAmount = Number(Math.max(0, existingPaidAmount - existingPeriodPaid).toFixed(2));
 
-        // Recalcular el totalAmount de la comanda amb IVA inclòs per poder comparar correctament
-        // Calcular el total amb IVA de tots els items de la comanda
+        // Recalcular el totalAmount de la comanda (totalPrice ja inclou IVA)
         const allOrderItems = order.items || [];
         let totalAmountWithTax = 0;
         for (const item of allOrderItems) {
-          const itemSubtotal = Number(item.totalPrice || 0);
-          const taxRate = item.article?.taxRate ? Number(item.article.taxRate) : 0;
-          const itemTax = itemSubtotal * (taxRate / 100);
-          const itemTotalWithTax = itemSubtotal + itemTax;
-          totalAmountWithTax += itemTotalWithTax;
+          totalAmountWithTax += Number(item.totalPrice || 0);
         }
         const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
 
-        // Recalcular estat de pagament de la comanda comparant amb el total amb IVA
+        // Recalcular estat de pagament de la comanda (totalAmount ja inclou IVA)
         if (order.paidAmount >= totalAmountWithTaxRounded) {
           order.paymentStatus = PaymentStatus.PAID;
         } else {
