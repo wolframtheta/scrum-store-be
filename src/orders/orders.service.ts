@@ -376,20 +376,24 @@ export class OrdersService {
         throw new NotFoundException(`Order with ID ${id} not found`);
       }
 
-      // Calculate total with tax (totalPrice ja inclou IVA)
+      // Calculate total with tax (totalPrice ja inclou IVA) + transport
       const validItems = (order.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
-      
       let totalPaid = 0;
       for (const item of validItems) {
         totalPaid += Number(item.totalPrice || 0);
       }
+      const transportCost = await this.calculateTransportCostForOrder(order);
+      const paidAmount = Number((totalPaid + transportCost).toFixed(2));
 
-      // Update order payment status
-      order.paidAmount = Number(totalPaid.toFixed(2));
+      order.paidAmount = paidAmount;
       order.paymentStatus = PaymentStatus.PAID;
 
-      // Save order (no cal guardar items, només l'order)
-      await queryRunner.manager.save(order);
+      // Actualitzar explícitament la taula orders (paid_amount i payment_status)
+      await queryRunner.manager.update(
+        Order,
+        { id: order.id },
+        { paidAmount, paymentStatus: PaymentStatus.PAID },
+      );
 
       await queryRunner.commitTransaction();
 
@@ -404,8 +408,6 @@ export class OrdersService {
       }
 
       const reloadedValidItems = (updatedOrder.items || []).filter(item => item && item.articleId !== null && item.articleId !== undefined);
-
-      const transportCost = await this.calculateTransportCostForOrder(updatedOrder);
 
       return new OrderResponseDto({
         ...updatedOrder,
@@ -778,63 +780,58 @@ export class OrdersService {
     }
 
     // Calcular el cost de transport repartit per usuari
-    // El transport es reparteix entre tots els usuaris únics que tenen comandes en aquest període
     const uniqueUserIds = Array.from(userMap.keys());
     const transportCost = period.transportCost ? Number(period.transportCost) : 0;
     const transportCostPerUser = uniqueUserIds.length > 0 
       ? Number((transportCost / uniqueUserIds.length).toFixed(2))
       : 0;
 
-    // Crear resum per usuari
+    // Precalcular transport per comanda (per considerar "totalment pagada" = productes + transport)
+    const orderTransportMap = new Map<string, number>();
+    for (const order of ordersWithPeriodItems) {
+      const transport = await this.calculateTransportCostForOrder(order);
+      orderTransportMap.set(order.id, transport);
+    }
+
+    // Crear resum per usuari (total i pagat inclouen transport)
     const userSummaries: UserPaymentSummaryDto[] = Array.from(userMap.values()).map(userData => {
       const total = Number((userData.subtotal + transportCostPerUser).toFixed(2));
-      
-      // Calcular quantitat pagada i estat de pagament basant-se només en els items d'aquest període
-      // paidAmount es calcula proporcionalment des del paidAmount de les comandes
       let paidAmount = 0;
-      let totalPeriodItemsAmount = 0;
-      
+      let allOrdersFullyPaid = true;
+
       for (const order of userData.orders) {
-        // Filtrar només els items d'aquest període
         const periodItems = order.items.filter(item => 
           item.periodId === periodId && 
           item.articleId !== null && 
           item.articleId !== undefined
         );
-        
-        // Calcular el total dels items d'aquest període (totalPrice ja inclou IVA)
         const periodItemsTotal = periodItems.reduce((sum, item) => 
           sum + Number(item.totalPrice || 0), 0
         );
-        totalPeriodItemsAmount += periodItemsTotal;
-        
-        // Calcular el paidAmount proporcional d'aquest període
         const orderTotalAmount = Number(order.totalAmount || 0);
         const orderPaidAmount = Number(order.paidAmount || 0);
-        
-        if (orderTotalAmount > 0) {
-          // Si la comanda està completament pagada, tots els items del període estan pagats
-          if (orderPaidAmount >= orderTotalAmount) {
+        const orderTransport = orderTransportMap.get(order.id) ?? 0;
+        const fullTotalForOrder = orderTotalAmount + orderTransport;
+
+        if (fullTotalForOrder > 0) {
+          if (orderPaidAmount >= fullTotalForOrder) {
             paidAmount += periodItemsTotal;
           } else {
-            // Si no està completament pagada, calcular proporcionalment
-            const paymentPercentage = orderPaidAmount / orderTotalAmount;
+            allOrdersFullyPaid = false;
+            const paymentPercentage = orderPaidAmount / fullTotalForOrder;
             paidAmount += periodItemsTotal * paymentPercentage;
           }
         }
       }
-      
-      // Determinar estat de pagament basant-se en si tots els items del període estan pagats
-      let paymentStatus: PaymentStatus;
-      const roundedPaidAmount = Number(paidAmount.toFixed(2));
-      const roundedTotalAmount = Number(totalPeriodItemsAmount.toFixed(2));
-      
-      if (roundedPaidAmount >= roundedTotalAmount && userData.orders.length > 0) {
-        paymentStatus = PaymentStatus.PAID;
-      } else {
-        paymentStatus = PaymentStatus.UNPAID;
+      // Afegir transport al pagat només si totes les comandes del usuari estan totalment pagades
+      if (allOrdersFullyPaid && userData.orders.length > 0) {
+        paidAmount += transportCostPerUser;
       }
-      
+      const roundedPaidAmount = Number(paidAmount.toFixed(2));
+      const paymentStatus = roundedPaidAmount >= total && userData.orders.length > 0
+        ? PaymentStatus.PAID
+        : PaymentStatus.UNPAID;
+
       return new UserPaymentSummaryDto({
         userId: userData.userId,
         userName: userData.userName,
@@ -842,7 +839,7 @@ export class OrdersService {
         transportCost: transportCostPerUser,
         total,
         ordersCount: userData.orders.length,
-        paidAmount: Number(paidAmount.toFixed(2)),
+        paidAmount: roundedPaidAmount,
         paymentStatus,
         orderIds: userData.orders.map(o => o.id),
       });
@@ -867,8 +864,8 @@ export class OrdersService {
   }
 
   /**
-   * Marca totes les comandes d'un període i usuari com a pagades.
-   * Només marca els items que pertanyen al període especificat.
+   * Marca totes les comandes pendents d'un usuari com a pagades.
+   * Quan es marca des del resum de pagaments, marca TOTES les comandes pendents del usuari.
    */
   async markPeriodOrdersAsPaid(periodId: string, userId: string, groupId: string): Promise<PeriodPaymentSummaryDto> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -876,71 +873,37 @@ export class OrdersService {
     await queryRunner.startTransaction();
 
     try {
-      // Obtenir totes les comandes del usuari al grup que tenen items d'aquest període
-      // Primer obtenir les comandes que tenen items d'aquest període
-      const ordersWithPeriodItems = await this.ordersRepository
-        .createQueryBuilder('order')
-        .leftJoin('order.items', 'items')
-        .where('order.consumer_group_id = :groupId', { groupId })
-        .andWhere('order.user_id = :userId', { userId })
-        .andWhere('items.period_id = :periodId', { periodId })
-        .select('DISTINCT order.id')
-        .getRawMany();
-      
-      const orderIds = ordersWithPeriodItems.map(o => o.order_id);
-      
-      if (orderIds.length === 0) {
-        await queryRunner.commitTransaction();
-        return this.getPeriodPaymentSummary(periodId, groupId);
-      }
-      
-      // Ara carregar les comandes completes amb TOTS els seus items (no només els del període)
+      // Obtenir TOTES les comandes pendents del usuari al grup (no només les del període)
       const orders = await this.ordersRepository
         .createQueryBuilder('order')
         .leftJoinAndSelect('order.items', 'items')
         .leftJoinAndSelect('items.article', 'article')
         .leftJoinAndSelect('items.period', 'period')
         .leftJoinAndSelect('order.user', 'user')
-        .where('order.id IN (:...orderIds)', { orderIds })
+        .where('order.consumer_group_id = :groupId', { groupId })
+        .andWhere('order.user_id = :userId', { userId })
+        .andWhere('order.payment_status = :status', { status: PaymentStatus.UNPAID })
         .getMany();
 
-      // Filtrar comandes que tenen items vàlids d'aquest període
-      const ordersToUpdate = orders.filter(order => 
-        order.items && order.items.some(item => 
-          item.periodId === periodId && 
-          item.articleId !== null && 
-          item.articleId !== undefined
-        )
-      );
+      if (orders.length === 0) {
+        await queryRunner.commitTransaction();
+        return this.getPeriodPaymentSummary(periodId, groupId);
+      }
 
-      // Per cada comanda, marcar només els items del període com a pagats
-      for (const order of ordersToUpdate) {
-        const validItems = (order.items || []).filter(item => 
-          item.periodId === periodId && 
-          item.articleId !== null && 
-          item.articleId !== undefined
-        );
-
-        // Calcular el total de la comanda (totalPrice ja inclou IVA)
+      // Marcar totes les comandes pendents com a pagades (productes + transport)
+      for (const order of orders) {
         const allOrderItems = order.items || [];
         let totalAmountWithTax = 0;
         for (const item of allOrderItems) {
           totalAmountWithTax += Number(item.totalPrice || 0);
         }
-        const totalAmountWithTaxRounded = Number(totalAmountWithTax.toFixed(2));
+        const transportCost = await this.calculateTransportCostForOrder(order);
+        const paidAmount = Number((totalAmountWithTax + transportCost).toFixed(2));
 
-        // Quan es marca com a pagat des del resum, establir el paidAmount igual al total amb IVA
-        order.paidAmount = totalAmountWithTaxRounded;
-        order.paymentStatus = PaymentStatus.PAID;
-
-        // Actualitzar només els camps de l'order (paidAmount només està a nivell de comanda)
         await queryRunner.manager.update(
           Order,
           { id: order.id },
-          { 
-            paidAmount: order.paidAmount,
-            paymentStatus: order.paymentStatus
-          }
+          { paidAmount, paymentStatus: PaymentStatus.PAID }
         );
       }
 
@@ -1003,49 +966,48 @@ export class OrdersService {
         )
       );
 
-      // Per cada comanda, marcar els items del període com a no pagats
+      const period = await this.periodsService.findOne(periodId, groupId);
+      const transportCost = period?.transportCost ? Number(period.transportCost) : 0;
+      const uniqueUsersInPeriod = await this.ordersRepository
+        .createQueryBuilder('order')
+        .innerJoin('order.items', 'item')
+        .where('item.period_id = :periodId', { periodId })
+        .andWhere('order.consumer_group_id = :groupId', { groupId })
+        .select('DISTINCT order.user_id')
+        .getRawMany();
+      const transportCostPerUser = uniqueUsersInPeriod.length > 0
+        ? Number((transportCost / uniqueUsersInPeriod.length).toFixed(2))
+        : 0;
+
       for (const order of ordersToUpdate) {
         const validItems = (order.items || []).filter(item => 
           item.periodId === periodId && 
           item.articleId !== null && 
           item.articleId !== undefined
         );
-
-        // Calcular el total dels items d'aquest període (totalPrice ja inclou IVA)
         const periodItemsTotal = validItems.reduce((sum, item) => 
           sum + Number(item.totalPrice || 0), 0
         );
-
-        // Calcular el total de la comanda (totalPrice ja inclou IVA)
         const allOrderItems = order.items || [];
         const orderTotalAmount = allOrderItems.reduce((sum, item) => 
           sum + Number(item.totalPrice || 0), 0
         );
+        const orderTransport = await this.calculateTransportCostForOrder(order);
+        const fullTotalForOrder = orderTotalAmount + orderTransport;
 
-        // Calcular quant estava pagat proporcionalment d'aquest període
         const existingPaidAmount = Number(order.paidAmount || 0);
         let existingPeriodPaid = 0;
-        
-        if (orderTotalAmount > 0 && existingPaidAmount > 0) {
-          // Si la comanda està completament pagada, tots els items del període estaven pagats
-          if (existingPaidAmount >= orderTotalAmount) {
-            existingPeriodPaid = periodItemsTotal;
+        if (fullTotalForOrder > 0 && existingPaidAmount > 0) {
+          if (existingPaidAmount >= fullTotalForOrder) {
+            existingPeriodPaid = periodItemsTotal + transportCostPerUser;
           } else {
-            // Si no està completament pagada, calcular proporcionalment
-            const paymentPercentage = existingPaidAmount / orderTotalAmount;
-            existingPeriodPaid = periodItemsTotal * paymentPercentage;
+            const paymentPercentage = existingPaidAmount / fullTotalForOrder;
+            existingPeriodPaid = (periodItemsTotal + transportCostPerUser) * paymentPercentage;
           }
         }
 
-        // Actualitzar paidAmount de la comanda (restar el que estava pagat d'aquest període)
         order.paidAmount = Number(Math.max(0, existingPaidAmount - existingPeriodPaid).toFixed(2));
-
-        // Recalcular estat de pagament de la comanda (totalAmount ja inclou IVA)
-        if (order.paidAmount >= orderTotalAmount) {
-          order.paymentStatus = PaymentStatus.PAID;
-        } else {
-          order.paymentStatus = PaymentStatus.UNPAID;
-        }
+        order.paymentStatus = order.paidAmount >= fullTotalForOrder ? PaymentStatus.PAID : PaymentStatus.UNPAID;
 
         // Actualitzar només els camps de l'order (paidAmount només està a nivell de comanda)
         await queryRunner.manager.update(
