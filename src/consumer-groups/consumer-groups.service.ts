@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
+import { removeAccents } from '../common/utils/string.utils';
 import { ConsumerGroup } from './entities/consumer-group.entity';
 import { UserConsumerGroup } from './entities/user-consumer-group.entity';
 import { User } from '../users/entities/user.entity';
@@ -348,9 +349,13 @@ export class ConsumerGroupsService {
   }) {
     const query = this.consumerGroupRepository.createQueryBuilder('group');
 
-    // Search by name
+    // Search by name (sense accents)
     if (options.search) {
-      query.where('group.name ILIKE :search', { search: `%${options.search}%` });
+      const normalizedSearch = removeAccents(options.search);
+      query.where(
+        `LOWER(TRANSLATE(group.name, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search)`,
+        { search: `%${normalizedSearch}%` }
+      );
     }
 
     // Filter by active status

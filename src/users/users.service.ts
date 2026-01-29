@@ -5,6 +5,7 @@ import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { removeAccents } from '../common/utils/string.utils';
 
 @Injectable()
 export class UsersService {
@@ -101,11 +102,14 @@ export class UsersService {
   }) {
     const query = this.usersRepository.createQueryBuilder('user');
 
-    // Search by name or email
+    // Search by name or email (sense accents)
     if (options.search) {
-      query.where('(user.name ILIKE :search OR user.email ILIKE :search)', { 
-        search: `%${options.search}%` 
-      });
+      const normalizedSearch = removeAccents(options.search);
+      query.where(
+        `(LOWER(TRANSLATE(user.name, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search) OR
+         LOWER(TRANSLATE(user.email, 'áàäâéèëêíìïîóòöôúùüûñçÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛÑÇ', 'aaaaeeeeiiiioooouuuuncAAAAEEEEIIIIOOOOUUUUNC')) LIKE LOWER(:search))`,
+        { search: `%${normalizedSearch}%` }
+      );
     }
 
     // Filter by role
