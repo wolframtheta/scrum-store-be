@@ -937,14 +937,16 @@ export class OrdersService {
       // Primer obtenir les comandes que tenen items d'aquest període
       const ordersWithPeriodItems = await this.ordersRepository
         .createQueryBuilder('order')
-        .leftJoin('order.items', 'items')
+        .innerJoin('order.items', 'items', 'items.period_id = :periodId', { periodId })
         .where('order.consumer_group_id = :groupId', { groupId })
         .andWhere('order.user_id = :userId', { userId })
-        .andWhere('items.period_id = :periodId', { periodId })
-        .select('DISTINCT order.id')
+        .distinct(true)
+        .select('order.id', 'orderId')
         .getRawMany();
-      
-      const orderIds = ordersWithPeriodItems.map(o => o.order_id);
+
+      const orderIds = ordersWithPeriodItems
+        .map((o) => o.orderId ?? (o as { order_id?: string }).order_id ?? (o as { id?: string }).id)
+        .filter((id): id is string => !!id);
       
       if (orderIds.length === 0) {
         await queryRunner.commitTransaction();
