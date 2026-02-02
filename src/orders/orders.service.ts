@@ -121,6 +121,22 @@ export class OrdersService {
       throw new BadRequestException('Order must have at least one item');
     }
 
+    // Verificar que cap període ha passat la data límit per comandar
+    const todayStr = new Date().toISOString().split('T')[0];
+    for (const item of createDto.items) {
+      if (item.orderPeriodId) {
+        const period = await this.periodsService.findOne(item.orderPeriodId, createDto.consumerGroupId);
+        const endDateStr = period.endDate instanceof Date
+          ? period.endDate.toISOString().split('T')[0]
+          : String(period.endDate).split('T')[0];
+        if (todayStr > endDateStr) {
+          throw new BadRequestException(
+            'No es pot tramitar la comanda: el termini per comandar ha passat'
+          );
+        }
+      }
+    }
+
     // Use transaction to ensure data consistency
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
