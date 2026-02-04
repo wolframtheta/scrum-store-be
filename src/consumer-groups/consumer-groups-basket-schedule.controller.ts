@@ -69,9 +69,10 @@ export class ConsumerGroupsBasketScheduleController {
     @Body() dto: SetBasketScheduleVoteDto,
     @Request() req: { user: { email: string } },
   ) {
+    const targetEmail = dto.userEmail?.trim() || req.user.email;
     await this.basketScheduleService.setVote(
       groupId,
-      req.user.email,
+      targetEmail,
       dto.date,
       dto.status,
       req.user.email,
