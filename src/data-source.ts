@@ -47,6 +47,7 @@ import { AddCustomizationOptions1769080326265 } from '../migrations/176908032626
 import { RemovePartialPaymentStatus1769555400000 } from '../migrations/1769555400000-RemovePartialPaymentStatus';
 import { RemovePaidAmountFromOrderItems1769591246000 } from '../migrations/1769591246000-RemovePaidAmountFromOrderItems';
 import { AddBasketScheduleTables1769600000000 } from '../migrations/1769600000000-AddBasketScheduleTables';
+import { AddIsPreparedToOrderItems1769700000000 } from '../migrations/1769700000000-AddIsPreparedToOrderItems';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -97,6 +98,7 @@ export const AppDataSource = new DataSource({
     RemovePartialPaymentStatus1769555400000,
     RemovePaidAmountFromOrderItems1769591246000,
     AddBasketScheduleTables1769600000000,
+    AddIsPreparedToOrderItems1769700000000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',

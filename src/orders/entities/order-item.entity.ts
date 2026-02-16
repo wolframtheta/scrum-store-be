@@ -38,6 +38,9 @@ export class OrderItem {
   @Column({ type: 'decimal', precision: 10, scale: 2, name: 'total_price' })
   totalPrice: number;
 
+  @Column({ type: 'boolean', name: 'is_prepared', default: false })
+  isPrepared: boolean;
+
   @Column({ type: 'jsonb', nullable: true, name: 'selected_options' })
   selectedOptions?: SelectedOption[];
 }

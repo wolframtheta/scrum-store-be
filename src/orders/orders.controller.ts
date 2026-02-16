@@ -117,6 +117,45 @@ export class OrdersController {
     return this.ordersService.markPeriodOrdersAsUnpaid(periodId, userId, groupId);
   }
 
+  @Patch('by-period/:periodId/items/prepared')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Marcar/desmarcar tots els items d\'un període com a preparats',
+    description: 'Actualitza l\'estat de preparació de tots els items d\'un període específic. Només preparadors i gestors poden fer-ho.',
+  })
+  @ApiResponse({ status: 200, description: 'Items del període actualitzats exitosament' })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Període no encontrado' })
+  updatePeriodItemsPrepared(
+    @Param('periodId', ParseUUIDPipe) periodId: string,
+    @Query('groupId') groupId: string,
+    @Body('isPrepared') isPrepared: boolean
+  ): Promise<{ affectedItems: number }> {
+    if (!groupId) {
+      throw new BadRequestException('groupId is required');
+    }
+    return this.ordersService.updatePeriodItemsPrepared(periodId, groupId, isPrepared);
+  }
+
+  @Patch(':orderId/items/:itemId/prepared')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Marcar/desmarcar un item com a preparat',
+    description: 'Actualitza l\'estat de preparació d\'un item específic. Només preparadors i gestors poden fer-ho.',
+  })
+  @ApiResponse({ status: 200, description: 'Estat de preparació actualitzat exitosament', type: OrderResponseDto })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Comanda o item no encontrado' })
+  updateItemPrepared(
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body('isPrepared') isPrepared: boolean
+  ): Promise<OrderResponseDto> {
+    return this.ordersService.updateItemPrepared(orderId, itemId, isPrepared);
+  }
+
   @Patch(':orderId/items/:itemId')
   @UseGuards(IsManagerOrPreparerGuard)
   @ApiOperation({
@@ -133,6 +172,24 @@ export class OrdersController {
     @Body(new ValidationPipe({ whitelist: true, transform: true })) updateDto: UpdateOrderItemDto
   ): Promise<OrderResponseDto> {
     return this.ordersService.updateOrderItem(orderId, itemId, updateDto);
+  }
+
+  @Patch(':orderId/by-period/:periodId/prepared')
+  @UseGuards(IsManagerOrPreparerGuard)
+  @ApiOperation({
+    summary: 'Marcar/desmarcar tots els items d\'una comanda en un període com a preparats',
+    description: 'Actualitza l\'estat de preparació de tots els items d\'una comanda que pertanyen a un període específic. Només preparadors i gestors poden fer-ho.',
+  })
+  @ApiResponse({ status: 200, description: 'Items de la comanda del període actualitzats exitosament', type: OrderResponseDto })
+  @ApiResponse({ status: 401, description: 'No autorizado' })
+  @ApiResponse({ status: 403, description: 'No eres gestor o preparador del grupo' })
+  @ApiResponse({ status: 404, description: 'Comanda o període no encontrado' })
+  updateOrderPeriodItemsPrepared(
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+    @Param('periodId', ParseUUIDPipe) periodId: string,
+    @Body('isPrepared') isPrepared: boolean
+  ): Promise<OrderResponseDto> {
+    return this.ordersService.updateOrderPeriodItemsPrepared(orderId, periodId, isPrepared);
   }
 
   @Delete(':orderId/items/:itemId')

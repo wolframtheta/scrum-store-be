@@ -70,6 +70,10 @@ export class OrderItemResponseDto {
   @Expose()
   totalPrice: number;
 
+  @ApiProperty({ example: false, description: 'Indica si aquest item ha estat preparat per a la seva entrega' })
+  @Expose()
+  isPrepared: boolean;
+
   @ApiPropertyOptional({ type: 'array', description: 'Opciones de personalización seleccionadas' })
   @Expose()
   selectedOptions?: any[];

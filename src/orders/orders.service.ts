@@ -44,6 +44,7 @@ export class OrdersService {
       quantity: item.quantity,
       pricePerUnit: item.pricePerUnit,
       totalPrice: item.totalPrice,
+      isPrepared: item.isPrepared || false,
       selectedOptions: item.selectedOptions,
     });
   }
@@ -1053,6 +1054,162 @@ export class OrdersService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+  }
+
+  /**
+   * Actualitza l'estat de preparació d'un item específic
+   */
+  async updateItemPrepared(orderId: string, itemId: string, isPrepared: boolean): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.article', 'items.period', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    const item = order.items.find(i => i.id === itemId);
+    if (!item) {
+      throw new NotFoundException(`Item with ID ${itemId} not found in order ${orderId}`);
+    }
+
+    // Actualitzar l'estat de preparació
+    await this.orderItemsRepository.update(
+      { id: itemId },
+      { isPrepared }
+    );
+
+    // Verificar si tots els items estan preparats per actualitzar isDelivered de la comanda
+    const allItemsPrepared = order.items.every(i => i.id === itemId ? isPrepared : i.isPrepared);
+    if (allItemsPrepared !== order.isDelivered) {
+      await this.ordersRepository.update(
+        { id: orderId },
+        { isDelivered: allItemsPrepared }
+      );
+    }
+
+    // Retornar la comanda actualitzada
+    return this.findOne(orderId, order.userId);
+  }
+
+  /**
+   * Marca/desmarca tots els items d'un període com a preparats
+   */
+  async updatePeriodItemsPrepared(periodId: string, groupId: string, isPrepared: boolean): Promise<{ affectedItems: number }> {
+    console.log('[updatePeriodItemsPrepared] periodId:', periodId, 'groupId:', groupId, 'isPrepared:', isPrepared);
+    
+    const period = await this.periodsService.findOne(periodId, groupId);
+    if (!period) {
+      throw new NotFoundException(`Period with ID ${periodId} not found`);
+    }
+
+    // Primer, comprovem quants items hi ha amb aquest periodId
+    const itemsCount = await this.orderItemsRepository
+      .createQueryBuilder('item')
+      .innerJoin('item.order', 'order')
+      .where('item.period_id = :periodId', { periodId })
+      .andWhere('order.consumer_group_id = :groupId', { groupId })
+      .getCount();
+
+    console.log('[updatePeriodItemsPrepared] Items found with period_id:', itemsCount);
+
+    // També comprovem items sense period_id
+    const itemsWithoutPeriod = await this.orderItemsRepository
+      .createQueryBuilder('item')
+      .innerJoin('item.order', 'order')
+      .where('item.period_id IS NULL')
+      .andWhere('order.consumer_group_id = :groupId', { groupId })
+      .getCount();
+
+    console.log('[updatePeriodItemsPrepared] Items WITHOUT period_id:', itemsWithoutPeriod);
+
+    // Actualitzar tots els items del període
+    const result = await this.orderItemsRepository
+      .createQueryBuilder()
+      .update(OrderItem)
+      .set({ isPrepared })
+      .where('period_id = :periodId', { periodId })
+      .andWhere('order_id IN (SELECT id FROM orders WHERE consumer_group_id = :groupId)', { groupId })
+      .execute();
+
+    console.log('[updatePeriodItemsPrepared] Updated items:', result.affected);
+
+    // Actualitzar isDelivered de les comandes afectades si tots els seus items estan preparats
+    if (isPrepared) {
+      await this.updateOrdersDeliveryStatus(groupId);
+    }
+
+    return { affectedItems: result.affected || 0 };
+  }
+
+  /**
+   * Marca/desmarca tots els items d'una comanda que pertanyen a un període com a preparats
+   */
+  async updateOrderPeriodItemsPrepared(orderId: string, periodId: string, isPrepared: boolean): Promise<OrderResponseDto> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.article', 'items.period', 'user'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with ID ${orderId} not found`);
+    }
+
+    const period = await this.periodsService.findOne(periodId, order.consumerGroupId);
+    if (!period) {
+      throw new NotFoundException(`Period with ID ${periodId} not found`);
+    }
+
+    // Actualitzar només els items d'aquest període
+    const itemsToUpdate = order.items.filter(item => item.periodId === periodId);
+    
+    if (itemsToUpdate.length === 0) {
+      throw new NotFoundException(`No items found for period ${periodId} in order ${orderId}`);
+    }
+
+    const itemIds = itemsToUpdate.map(item => item.id);
+    await this.orderItemsRepository.update(
+      { id: In(itemIds) },
+      { isPrepared }
+    );
+
+    // Recarregar la comanda per veure l'estat actualitzat
+    const updatedOrder = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.article', 'items.period', 'user'],
+    });
+
+    // Verificar si tots els items estan preparats per actualitzar isDelivered
+    const allItemsPrepared = updatedOrder!.items.every(item => item.isPrepared);
+    if (allItemsPrepared !== updatedOrder!.isDelivered) {
+      await this.ordersRepository.update(
+        { id: orderId },
+        { isDelivered: allItemsPrepared }
+      );
+    }
+
+    return this.findOne(orderId, order.userId);
+  }
+
+  /**
+   * Actualitza l'estat isDelivered de totes les comandes d'un grup segons l'estat dels seus items
+   */
+  private async updateOrdersDeliveryStatus(groupId: string): Promise<void> {
+    const orders = await this.ordersRepository.find({
+      where: { consumerGroupId: groupId },
+      relations: ['items'],
+    });
+
+    for (const order of orders) {
+      const allItemsPrepared = order.items.length > 0 && order.items.every(item => item.isPrepared);
+      if (allItemsPrepared !== order.isDelivered) {
+        await this.ordersRepository.update(
+          { id: order.id },
+          { isDelivered: allItemsPrepared }
+        );
+      }
     }
   }
 }
