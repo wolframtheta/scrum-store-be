@@ -23,6 +23,7 @@ import { Period } from './periods/entities/period.entity';
 import { PeriodArticle } from './periods/entities/period-article.entity';
 import { Order } from './orders/entities/order.entity';
 import { OrderItem } from './orders/entities/order-item.entity';
+import { PeriodUserPayment } from './orders/entities/period-user-payment.entity';
 
 // Importar migraciones
 import { InitialSchema1735152000000 } from '../migrations/1735152000000-InitialSchema1735152000000';
@@ -48,6 +49,7 @@ import { RemovePartialPaymentStatus1769555400000 } from '../migrations/176955540
 import { RemovePaidAmountFromOrderItems1769591246000 } from '../migrations/1769591246000-RemovePaidAmountFromOrderItems';
 import { AddBasketScheduleTables1769600000000 } from '../migrations/1769600000000-AddBasketScheduleTables';
 import { AddIsPreparedToOrderItems1769700000000 } from '../migrations/1769700000000-AddIsPreparedToOrderItems';
+import { CreatePeriodUserPayments1771261537000 } from '../migrations/1771261537000-CreatePeriodUserPayments';
 
 export const AppDataSource = new DataSource({
   type: 'postgres',
@@ -74,6 +76,7 @@ export const AppDataSource = new DataSource({
     PeriodArticle,
     Order,
     OrderItem,
+    PeriodUserPayment,
   ],
   migrations: [
     InitialSchema1735152000000,
@@ -99,6 +102,7 @@ export const AppDataSource = new DataSource({
     RemovePaidAmountFromOrderItems1769591246000,
     AddBasketScheduleTables1769600000000,
     AddIsPreparedToOrderItems1769700000000,
+    CreatePeriodUserPayments1771261537000,
   ],
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',

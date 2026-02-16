@@ -4,6 +4,7 @@ import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
+import { PeriodUserPayment } from './entities/period-user-payment.entity';
 import { ArticlesModule } from '../articles/articles.module';
 import { ConsumerGroupsModule } from '../consumer-groups/consumer-groups.module';
 import { UsersModule } from '../users/users.module';
@@ -11,7 +12,7 @@ import { PeriodsModule } from '../periods/periods.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem]),
+    TypeOrmModule.forFeature([Order, OrderItem, PeriodUserPayment]),
     forwardRef(() => ArticlesModule),
     forwardRef(() => ConsumerGroupsModule),
     forwardRef(() => UsersModule),

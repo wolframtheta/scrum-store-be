@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Exclude, Expose } from 'class-transformer';
-import { PaymentStatus } from '../entities/order.entity';
+import { PeriodPaymentStatus } from '../entities/period-user-payment.entity';
 
 @Exclude()
 export class UserPaymentSummaryDto {
@@ -28,13 +28,9 @@ export class UserPaymentSummaryDto {
   @Expose()
   ordersCount: number;
 
-  @ApiProperty({ example: 0, description: 'Quantitat pagada fins ara' })
+  @ApiProperty({ enum: PeriodPaymentStatus, example: PeriodPaymentStatus.UNPAID, description: 'Estat de pagament del període' })
   @Expose()
-  paidAmount: number;
-
-  @ApiProperty({ enum: PaymentStatus, example: PaymentStatus.UNPAID, description: 'Estat de pagament general' })
-  @Expose()
-  paymentStatus: PaymentStatus;
+  paymentStatus: PeriodPaymentStatus;
 
   @ApiProperty({ example: ['order-id-1', 'order-id-2'], description: 'IDs de les comandes del període' })
   @Expose()
