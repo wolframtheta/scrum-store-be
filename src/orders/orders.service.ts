@@ -299,7 +299,7 @@ export class OrdersService {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
-    // Verify user has access (owner or manager)
+    // Verify user has access (owner, manager or preparer)
     const user = await this.usersService.findById(userId);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -307,8 +307,9 @@ export class OrdersService {
 
     const isOwner = order.userId === userId;
     const isManager = await this.consumerGroupsService.isManager(user.email, order.consumerGroupId);
+    const isPreparer = await this.consumerGroupsService.isPreparer(user.email, order.consumerGroupId);
     
-    if (!isOwner && !isManager) {
+    if (!isOwner && !isManager && !isPreparer) {
       throw new ForbiddenException('You do not have access to this order');
     }
 
