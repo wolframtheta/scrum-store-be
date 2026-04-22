@@ -32,10 +32,8 @@ lerna-debug.log*
 
 # Environment variables
 .env
-.env.local
-.env.pre
-.env.pro
-.env.*.local
+.env.*
+!.env.example
 .docker-registry.env
 
 # Build
