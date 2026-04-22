@@ -48,7 +48,15 @@
     "seed:run:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/seeds/run.ts",
     "seed:reset:pre": "ENVIRONMENT=pre ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts",
     "seed:reset:pro": "ENVIRONMENT=pro ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts",
-    "seed:reset:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts"
+    "seed:reset:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/scripts/reset-seeds.ts",
+    "db:export": "ts-node -r tsconfig-paths/register src/scripts/db-export.ts",
+    "db:export:pre": "ENVIRONMENT=pre ts-node -r tsconfig-paths/register src/scripts/db-export.ts",
+    "db:export:pro": "ENVIRONMENT=pro ts-node -r tsconfig-paths/register src/scripts/db-export.ts",
+    "db:export:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/scripts/db-export.ts",
+    "db:import": "ts-node -r tsconfig-paths/register src/scripts/db-import.ts",
+    "db:import:pre": "ENVIRONMENT=pre ts-node -r tsconfig-paths/register src/scripts/db-import.ts",
+    "db:import:pro": "ENVIRONMENT=pro ts-node -r tsconfig-paths/register src/scripts/db-import.ts",
+    "db:import:production": "ENVIRONMENT=production NODE_ENV=production ts-node -r tsconfig-paths/register src/scripts/db-import.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.932.0",
