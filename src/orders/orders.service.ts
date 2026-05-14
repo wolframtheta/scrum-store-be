@@ -905,24 +905,91 @@ export class OrdersService {
 
     const totalAmount = Number((subtotal + transportCostPerUser).toFixed(2));
 
-    // Crear o actualitzar el registre de pagament
-    const existingPayment = await this.periodUserPaymentsRepository.findOne({
-      where: { periodId, userId, consumerGroupId: groupId }
-    });
+    // Usar transacció per garantir consistència de dades
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    if (existingPayment) {
-      existingPayment.paymentStatus = PeriodPaymentStatus.PAID;
-      existingPayment.totalAmount = totalAmount;
-      await this.periodUserPaymentsRepository.save(existingPayment);
-    } else {
-      const newPayment = this.periodUserPaymentsRepository.create({
-        periodId,
-        userId,
-        consumerGroupId: groupId,
-        paymentStatus: PeriodPaymentStatus.PAID,
-        totalAmount,
+    try {
+      // Crear o actualitzar el registre de pagament del període
+      const existingPayment = await queryRunner.manager.findOne(PeriodUserPayment, {
+        where: { periodId, userId, consumerGroupId: groupId }
       });
-      await this.periodUserPaymentsRepository.save(newPayment);
+
+      if (existingPayment) {
+        existingPayment.paymentStatus = PeriodPaymentStatus.PAID;
+        existingPayment.totalAmount = totalAmount;
+        await queryRunner.manager.save(existingPayment);
+      } else {
+        const newPayment = queryRunner.manager.create(PeriodUserPayment, {
+          periodId,
+          userId,
+          consumerGroupId: groupId,
+          paymentStatus: PeriodPaymentStatus.PAID,
+          totalAmount,
+        });
+        await queryRunner.manager.save(newPayment);
+      }
+
+      // Actualitzar l'estat de pagament de les comandes que tenen items d'aquest període
+      for (const order of orders) {
+        // Recarregar la comanda amb tots els items per verificar si tots els períodes estan pagats
+        const fullOrder = await queryRunner.manager.findOne(Order, {
+          where: { id: order.id },
+          relations: ['items'],
+        });
+
+        if (!fullOrder) continue;
+
+        // Obtenir tots els períodes únics de la comanda
+        const periodIds = [...new Set(fullOrder.items
+          .map(item => item.periodId)
+          .filter(id => id !== null && id !== undefined)
+        )] as string[];
+
+        // Verificar si tots els períodes d'aquesta comanda estan pagats
+        let allPeriodsPaid = true;
+        for (const pId of periodIds) {
+          const payment = await queryRunner.manager.findOne(PeriodUserPayment, {
+            where: {
+              periodId: pId,
+              userId,
+              consumerGroupId: groupId,
+            }
+          });
+          if (!payment || payment.paymentStatus !== PeriodPaymentStatus.PAID) {
+            allPeriodsPaid = false;
+            break;
+          }
+        }
+
+        // Si tots els períodes estan pagats, marcar la comanda com a pagada
+        if (allPeriodsPaid && periodIds.length > 0) {
+          // Calcular el paidAmount total (items + transport)
+          const itemsTotal = fullOrder.items
+            .filter(item => item.articleId !== null)
+            .reduce((sum, item) => sum + Number(item.totalPrice || 0), 0);
+          
+          const orderTransportCost = await this.calculateTransportCostForOrder(fullOrder);
+          const paidAmount = Number((itemsTotal + orderTransportCost).toFixed(2));
+
+          await queryRunner.manager.update(
+            Order,
+            { id: order.id },
+            { 
+              paymentStatus: PaymentStatus.PAID,
+              paidAmount,
+            },
+          );
+        }
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
 
     return this.getPeriodPaymentSummary(periodId, groupId);
@@ -937,23 +1004,59 @@ export class OrdersService {
       throw new NotFoundException(`Period with ID ${periodId} not found`);
     }
 
-    // Crear o actualitzar el registre de pagament
-    const existingPayment = await this.periodUserPaymentsRepository.findOne({
-      where: { periodId, userId, consumerGroupId: groupId }
-    });
+    // Obtenir comandes del període
+    const orders = await this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .where('order.consumer_group_id = :groupId', { groupId })
+      .andWhere('order.user_id = :userId', { userId })
+      .andWhere('items.period_id = :periodId', { periodId })
+      .getMany();
 
-    if (existingPayment) {
-      existingPayment.paymentStatus = PeriodPaymentStatus.UNPAID;
-      await this.periodUserPaymentsRepository.save(existingPayment);
-    } else {
-      const newPayment = this.periodUserPaymentsRepository.create({
-        periodId,
-        userId,
-        consumerGroupId: groupId,
-        paymentStatus: PeriodPaymentStatus.UNPAID,
-        totalAmount: 0,
+    // Usar transacció per garantir consistència de dades
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Crear o actualitzar el registre de pagament del període
+      const existingPayment = await queryRunner.manager.findOne(PeriodUserPayment, {
+        where: { periodId, userId, consumerGroupId: groupId }
       });
-      await this.periodUserPaymentsRepository.save(newPayment);
+
+      if (existingPayment) {
+        existingPayment.paymentStatus = PeriodPaymentStatus.UNPAID;
+        await queryRunner.manager.save(existingPayment);
+      } else {
+        const newPayment = queryRunner.manager.create(PeriodUserPayment, {
+          periodId,
+          userId,
+          consumerGroupId: groupId,
+          paymentStatus: PeriodPaymentStatus.UNPAID,
+          totalAmount: 0,
+        });
+        await queryRunner.manager.save(newPayment);
+      }
+
+      // Actualitzar l'estat de pagament de les comandes que tenen items d'aquest període
+      // Si un període es marca com a no pagat, la comanda també ha de ser no pagada
+      for (const order of orders) {
+        await queryRunner.manager.update(
+          Order,
+          { id: order.id },
+          { 
+            paymentStatus: PaymentStatus.UNPAID,
+            paidAmount: 0,
+          },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
 
     return this.getPeriodPaymentSummary(periodId, groupId);
