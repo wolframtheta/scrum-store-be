@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { Order, PaymentStatus } from './entities/order.entity';
@@ -13,9 +13,18 @@ import { UsersService } from '../users/users.service';
 import { ArticleResponseDto } from '../articles/dto/article-response.dto';
 import { PeriodsService } from '../periods/periods.service';
 import { PeriodPaymentSummaryDto, UserPaymentSummaryDto } from './dto/period-payment-summary.dto';
+import { createHash } from 'crypto';
+
+interface IdempotencyCache {
+  orderId: string;
+  timestamp: number;
+}
 
 @Injectable()
 export class OrdersService {
+  private idempotencyCache = new Map<string, IdempotencyCache>();
+  private readonly IDEMPOTENCY_WINDOW_MS = 30000; // 30 segons
+
   constructor(
     @InjectRepository(Order)
     private readonly ordersRepository: Repository<Order>,
@@ -28,7 +37,33 @@ export class OrdersService {
     private readonly usersService: UsersService,
     private readonly periodsService: PeriodsService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) {
+    // Netejar cache cada minut
+    setInterval(() => this.cleanIdempotencyCache(), 60000);
+  }
+
+  private generateIdempotencyKey(userId: string, createDto: CreateOrderDto): string {
+    const content = JSON.stringify({
+      userId,
+      groupId: createDto.consumerGroupId,
+      items: createDto.items.map(item => ({
+        articleId: item.articleId,
+        quantity: item.quantity,
+        periodId: item.orderPeriodId,
+        options: item.selectedOptions
+      }))
+    });
+    return createHash('sha256').update(content).digest('hex');
+  }
+
+  private cleanIdempotencyCache(): void {
+    const now = Date.now();
+    for (const [key, value] of this.idempotencyCache.entries()) {
+      if (now - value.timestamp > this.IDEMPOTENCY_WINDOW_MS) {
+        this.idempotencyCache.delete(key);
+      }
+    }
+  }
 
   private mapOrderItemToDto(item: OrderItem): OrderItemResponseDto {
     return new OrderItemResponseDto({
@@ -109,6 +144,19 @@ export class OrdersService {
   }
 
   async create(userId: string, createDto: CreateOrderDto): Promise<OrderResponseDto> {
+    // Generar clau d'idempotència basada en el contingut
+    const idempotencyKey = this.generateIdempotencyKey(userId, createDto);
+    
+    // Comprovar si hi ha una comanda recent amb el mateix contingut
+    const cachedOrder = this.idempotencyCache.get(idempotencyKey);
+    if (cachedOrder) {
+      const timeSinceCreation = Date.now() - cachedOrder.timestamp;
+      if (timeSinceCreation < this.IDEMPOTENCY_WINDOW_MS) {
+        // Retornar la comanda existent
+        return this.findOne(cachedOrder.orderId, userId);
+      }
+    }
+
     // Get user to verify it exists
     const user = await this.usersService.findById(userId);
     if (!user) {
@@ -230,6 +278,12 @@ export class OrdersService {
       await queryRunner.manager.save(savedOrder);
 
       await queryRunner.commitTransaction();
+
+      // Guardar en cache per evitar duplicats
+      this.idempotencyCache.set(idempotencyKey, {
+        orderId: savedOrder.id,
+        timestamp: Date.now()
+      });
 
       // Reload order with items
       const completeOrder = await this.ordersRepository.findOne({
