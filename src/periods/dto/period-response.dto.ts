@@ -43,6 +43,7 @@ export class PeriodResponseDto {
   supplier?: {
     id: string;
     name: string;
+    email?: string;
   };
 
   @ApiProperty()

@@ -30,7 +30,7 @@ import { OrdersModule } from '../orders/orders.module';
       User,
     ]),
     StorageModule,
-    PeriodsModule,
+    forwardRef(() => PeriodsModule),
     forwardRef(() => OrdersModule),
   ],
   controllers: [

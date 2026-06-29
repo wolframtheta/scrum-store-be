@@ -22,13 +22,14 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import storageConfig from './config/storage.config';
 import throttleConfig from './config/throttle.config';
+import mailConfig from './config/mail.config';
 import { getEnvFilePaths } from './config/env.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, storageConfig, throttleConfig],
+      load: [appConfig, databaseConfig, jwtConfig, storageConfig, throttleConfig, mailConfig],
       envFilePath: getEnvFilePaths(),
     }),
     TypeOrmModule.forRootAsync({

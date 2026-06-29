@@ -3,7 +3,9 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { PeriodsService } from './periods.service';
 import { CreatePeriodDto, CreatePeriodArticlesBatchDto } from './dto/create-period.dto';
 import { UpdatePeriodDto } from './dto/update-period.dto';
+import { SendPeriodSummaryResponseDto } from './dto/send-period-summary-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('periods')
 @ApiBearerAuth()
@@ -110,6 +112,20 @@ export class PeriodsController {
     @Query('consumerGroupId') consumerGroupId: string,
   ) {
     return this.periodsService.removeArticle(periodId, consumerGroupId, articleId);
+  }
+
+  @Post(':id/send-summary')
+  @ApiOperation({ summary: 'Enviar resum de comandes del període al proveïdor per correu' })
+  @ApiResponse({ status: 201, description: 'Resum enviat correctament', type: SendPeriodSummaryResponseDto })
+  @ApiResponse({ status: 400, description: 'Proveïdor sense email o sense comandes' })
+  @ApiResponse({ status: 403, description: 'Només gestors' })
+  @ApiResponse({ status: 503, description: 'Servei de correu no configurat' })
+  sendOrdersSummary(
+    @Param('id') periodId: string,
+    @Query('consumerGroupId') consumerGroupId: string,
+    @CurrentUser() user: { email: string },
+  ): Promise<SendPeriodSummaryResponseDto> {
+    return this.periodsService.sendOrdersSummaryToSupplier(periodId, consumerGroupId, user.email);
   }
 }
 

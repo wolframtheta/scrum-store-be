@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, MoreThanOrEqual, LessThanOrEqual, Between } from 'typeorm';
 import { Period, PeriodRecurrence } from './entities/period.entity';
@@ -6,8 +6,17 @@ import { PeriodArticle } from './entities/period-article.entity';
 import { CreatePeriodDto } from './dto/create-period.dto';
 import { UpdatePeriodDto } from './dto/update-period.dto';
 import { PeriodResponseDto } from './dto/period-response.dto';
+import { SendPeriodSummaryResponseDto } from './dto/send-period-summary-response.dto';
 import { ShowcasePeriodDto, ShowcaseArticleItemDto } from './dto/showcase-response.dto';
 import { SuppliersService } from '../suppliers/suppliers.service';
+import { ConsumerGroupsService } from '../consumer-groups/consumer-groups.service';
+import { MailService } from '../mail/mail.service';
+import { Order } from '../orders/entities/order.entity';
+import {
+  buildPeriodOrdersSummary,
+  formatDateCa,
+  formatPeriodOrdersSummaryText,
+} from './utils/period-orders-summary-content.util';
 
 @Injectable()
 export class PeriodsService {
@@ -16,7 +25,11 @@ export class PeriodsService {
     private readonly periodsRepository: Repository<Period>,
     @InjectRepository(PeriodArticle)
     private readonly periodArticlesRepository: Repository<PeriodArticle>,
+    @InjectRepository(Order)
+    private readonly ordersRepository: Repository<Order>,
     private readonly suppliersService: SuppliersService,
+    private readonly consumerGroupsService: ConsumerGroupsService,
+    private readonly mailService: MailService,
   ) {}
 
   async create(createPeriodDto: CreatePeriodDto, consumerGroupId: string): Promise<PeriodResponseDto> {
@@ -501,6 +514,81 @@ export class PeriodsService {
     });
 
     return pricesMap;
+  }
+
+  async sendOrdersSummaryToSupplier(
+    periodId: string,
+    consumerGroupId: string,
+    requesterEmail: string,
+  ): Promise<SendPeriodSummaryResponseDto> {
+    const isManager = await this.consumerGroupsService.isManager(requesterEmail, consumerGroupId);
+    if (!isManager) {
+      throw new ForbiddenException('Només els gestors poden enviar el resum de comandes per correu');
+    }
+
+    const periodEntity = await this.periodsRepository.findOne({
+      where: { id: periodId },
+      relations: ['supplier', 'periodArticles', 'periodArticles.article'],
+    });
+
+    if (!periodEntity) {
+      throw new NotFoundException(`Period with ID ${periodId} not found`);
+    }
+
+    await this.suppliersService.findOne(periodEntity.supplierId, consumerGroupId);
+
+    const supplierEmail = periodEntity.supplier?.email?.trim();
+    if (!supplierEmail) {
+      throw new BadRequestException(
+        'El proveïdor no té correu electrònic registrat. Afegeix-lo a la fitxa del proveïdor.',
+      );
+    }
+
+    const orders = await this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.article', 'article')
+      .where('order.consumer_group_id = :consumerGroupId', { consumerGroupId })
+      .getMany();
+
+    const articlesSummary = buildPeriodOrdersSummary(periodEntity, orders);
+    if (articlesSummary.length === 0) {
+      throw new BadRequestException('No hi ha comandes per enviar en aquest període');
+    }
+
+    const summaryContent = formatPeriodOrdersSummaryText(articlesSummary);
+    const supplierName = periodEntity.supplier?.name || 'Proveïdor';
+    const subject = `Comandes període: ${periodEntity.name}`;
+    const body = [
+      `Benvolgut/da ${supplierName},`,
+      '',
+      `Us enviem el resum de comandes del període "${periodEntity.name}".`,
+      `Període: ${formatDateCa(periodEntity.startDate)} - ${formatDateCa(periodEntity.endDate)}`,
+      `Data de lliurament: ${formatDateCa(periodEntity.deliveryDate)}`,
+      '',
+      'El detall de les comandes es troba al fitxer adjunt.',
+      '',
+      'Salutacions,',
+    ].join('\n');
+
+    await this.mailService.sendMail({
+      to: supplierEmail,
+      subject,
+      text: body,
+      attachments: [
+        {
+          filename: 'comandes.txt',
+          content: `\uFEFF${summaryContent}`,
+          contentType: 'text/plain; charset=utf-8',
+        },
+      ],
+    });
+
+    return new SendPeriodSummaryResponseDto({
+      sentTo: supplierEmail,
+      subject,
+      sentAt: new Date(),
+    });
   }
 }
 
