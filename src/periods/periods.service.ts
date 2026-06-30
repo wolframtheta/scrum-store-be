@@ -96,13 +96,21 @@ export class PeriodsService {
       order: { startDate: 'DESC' },
     });
 
-    return periods.map(period => {
-      // Assegurar que transportTaxRate sempre tingui un valor vàlid
-      const periodDto = new PeriodResponseDto({
-        ...period,
-        transportTaxRate: period.transportTaxRate ?? 21,
-      });
-      return periodDto;
+    return periods.map(period => this.toPeriodResponseDto(period));
+  }
+
+  private toPeriodResponseDto(period: Period): PeriodResponseDto {
+    return new PeriodResponseDto({
+      ...period,
+      transportTaxRate: period.transportTaxRate ?? 21,
+      supplier: period.supplier
+        ? {
+            id: period.supplier.id,
+            name: period.supplier.name,
+            email: period.supplier.email,
+            phone: period.supplier.phone,
+          }
+        : undefined,
     });
   }
 
@@ -120,10 +128,7 @@ export class PeriodsService {
     await this.suppliersService.findOne(period.supplierId, consumerGroupId);
 
     // Assegurar que transportTaxRate sempre tingui un valor vàlid
-    return new PeriodResponseDto({
-      ...period,
-      transportTaxRate: period.transportTaxRate ?? 21,
-    });
+    return this.toPeriodResponseDto(period);
   }
 
   async update(id: string, consumerGroupId: string, updatePeriodDto: UpdatePeriodDto): Promise<PeriodResponseDto> {

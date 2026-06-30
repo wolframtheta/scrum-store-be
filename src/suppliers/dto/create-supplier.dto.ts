@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsUUID, IsEmail, IsBoolean } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsEmail, IsBoolean, ValidateIf } from 'class-validator';
 
 export class CreateSupplierDto {
   @ApiProperty({ example: 'Cooperativa Agrícola del Vallès', description: 'Nombre del proveedor' })
@@ -14,11 +14,13 @@ export class CreateSupplierDto {
 
   @ApiPropertyOptional({ example: 'info@cooperativa.cat', description: 'Email del proveedor' })
   @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
   @IsEmail()
   email?: string;
 
   @ApiPropertyOptional({ example: '+34 666 777 888', description: 'Teléfono del proveedor' })
   @IsOptional()
+  @ValidateIf((_, value) => value !== '' && value != null)
   @IsString()
   phone?: string;
 

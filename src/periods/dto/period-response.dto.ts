@@ -44,6 +44,7 @@ export class PeriodResponseDto {
     id: string;
     name: string;
     email?: string;
+    phone?: string;
   };
 
   @ApiProperty()
