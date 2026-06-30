@@ -537,6 +537,12 @@ export class PeriodsService {
 
     await this.suppliersService.findOne(periodEntity.supplierId, consumerGroupId);
 
+    const consumerGroup = await this.consumerGroupsService.findById(consumerGroupId);
+    const { from: fromAddress, replyTo } = this.mailService.formatGroupSender(
+      consumerGroup.name,
+      consumerGroup.email,
+    );
+
     const supplierEmail = periodEntity.supplier?.email?.trim();
     if (!supplierEmail) {
       throw new BadRequestException(
@@ -569,10 +575,14 @@ export class PeriodsService {
       'El detall de les comandes es troba al fitxer adjunt.',
       '',
       'Salutacions,',
+      consumerGroup.name,
+      consumerGroup.email,
     ].join('\n');
 
     await this.mailService.sendMail({
       to: supplierEmail,
+      from: fromAddress,
+      replyTo,
       subject,
       text: body,
       attachments: [
